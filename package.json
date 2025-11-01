@@ -1,0 +1,47 @@
+{
+  "name": "absence-management-app",
+  "version": "1.0.0",
+  "description": "Absence and vacation management system with Microsoft 365 integration",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^14.2.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.4.5",
+    "mongoose": "^8.3.4",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@azure/msal-node": "^2.7.0",
+    "@azure/identity": "^4.2.0",
+    "next-auth": "^4.24.7",
+    "@fluentui/react-components": "^9.49.0",
+    "@fluentui/react-icons": "^2.0.239",
+    "date-fns": "^3.6.0",
+    "zod": "^3.23.6",
+    "react-hook-form": "^7.51.3",
+    "@hookform/resolvers": "^3.3.4",
+    "axios": "^1.6.8",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
