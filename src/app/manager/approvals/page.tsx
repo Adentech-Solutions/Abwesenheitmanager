@@ -1,5 +1,10 @@
 'use client';
 
+// ========================================
+// FILE: src/app/manager/approvals/page.tsx
+// Full Approvals Page - Linked from Manager Dashboard
+// ========================================
+
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -28,7 +33,7 @@ export default function ManagerApprovalsPage() {
   const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  // Redirect if not authenticated or not a manager
+  // Redirect if not manager
   useEffect(() => {
     if (status === 'loading') return;
     
@@ -54,6 +59,8 @@ export default function ManagerApprovalsPage() {
   const fetchAbsences = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
       const response = await fetch('/api/approvals?status=pending');
       
       if (!response.ok) {
@@ -70,21 +77,18 @@ export default function ManagerApprovalsPage() {
     }
   };
 
-  const handleApproval = async (absenceId: string, status: 'approved' | 'rejected') => {
+  const handleApproval = async (absenceId: string, action: 'approved' | 'rejected') => {
     try {
       setProcessingId(absenceId);
       
-      // Use existing approve/reject endpoints
-      const endpoint = status === 'approved' 
+      const endpoint = action === 'approved' 
         ? `/api/approvals/${absenceId}/approve`
         : `/api/approvals/${absenceId}/reject`;
       
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: status === 'rejected' 
+        headers: { 'Content-Type': 'application/json' },
+        body: action === 'rejected' 
           ? JSON.stringify({ reason: 'Vom Manager abgelehnt' })
           : JSON.stringify({}),
       });
@@ -94,14 +98,7 @@ export default function ManagerApprovalsPage() {
         throw new Error(error.error || 'Failed to update absence');
       }
 
-      // Show success message
-      alert(
-        status === 'approved' 
-          ? 'Antrag erfolgreich genehmigt!' 
-          : 'Antrag erfolgreich abgelehnt!'
-      );
-
-      // Refresh the list
+      alert(action === 'approved' ? '✅ Genehmigt!' : '❌ Abgelehnt!');
       await fetchAbsences();
     } catch (err: any) {
       alert(`Fehler: ${err.message}`);
@@ -125,17 +122,15 @@ export default function ManagerApprovalsPage() {
       sick: 'Krankheit',
       training: 'Fortbildung',
       parental: 'Elternzeit',
-      unpaid: 'Unbezahlter Urlaub',
-      other: 'Sonstiges',
     };
     return types[type] || type;
   };
 
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Laden...</p>
         </div>
       </div>
@@ -144,13 +139,13 @@ export default function ManagerApprovalsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-          <h2 className="text-red-800 font-semibold mb-2">Fehler</h2>
-          <p className="text-red-600">{error}</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="bg-danger-50 border border-danger-200 rounded-lg p-6 max-w-md">
+          <h2 className="text-danger-800 font-semibold mb-2">Fehler</h2>
+          <p className="text-danger-600">{error}</p>
           <button
             onClick={fetchAbsences}
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            className="mt-4 px-4 py-2 bg-danger-600 text-white rounded hover:bg-danger-700 transition-colors"
           >
             Erneut versuchen
           </button>
@@ -162,10 +157,19 @@ export default function ManagerApprovalsPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
+        {/* Header with Back Button */}
         <div className="mb-8">
+          <button
+            onClick={() => router.push('/manager')}
+            className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Zurück zum Dashboard
+          </button>
           <h1 className="text-3xl font-bold text-gray-900">
-            Offene Genehmigungen ({absences.length})
+            Offene Genehmigungen ({absences?.length || 0})
           </h1>
           <p className="text-gray-600 mt-2">
             Anträge Ihrer Mitarbeiter, die auf Genehmigung warten
@@ -173,7 +177,7 @@ export default function ManagerApprovalsPage() {
         </div>
 
         {/* Absences List */}
-        {absences.length === 0 ? (
+        {!absences || absences.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <svg
               className="mx-auto h-12 w-12 text-gray-400"
@@ -194,6 +198,12 @@ export default function ManagerApprovalsPage() {
             <p className="mt-2 text-gray-500">
               Aktuell gibt es keine Abwesenheitsanträge, die genehmigt werden müssen.
             </p>
+            <button
+              onClick={() => router.push('/manager')}
+              className="mt-6 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+            >
+              Zurück zum Dashboard
+            </button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -206,7 +216,7 @@ export default function ManagerApprovalsPage() {
                   <div className="flex-1">
                     {/* Employee Info */}
                     <div className="flex items-center mb-4">
-                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-lg mr-3">
+                      <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-semibold text-lg mr-3">
                         {absence.userName.charAt(0).toUpperCase()}
                       </div>
                       <div>
@@ -264,7 +274,7 @@ export default function ManagerApprovalsPage() {
                     <button
                       onClick={() => handleApproval(absence._id, 'approved')}
                       disabled={processingId === absence._id}
-                      className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                      className="px-6 py-2 bg-success-600 text-white rounded-lg hover:bg-success-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                       {processingId === absence._id ? (
                         <span className="flex items-center">
@@ -281,7 +291,7 @@ export default function ManagerApprovalsPage() {
                     <button
                       onClick={() => handleApproval(absence._id, 'rejected')}
                       disabled={processingId === absence._id}
-                      className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                      className="px-6 py-2 bg-danger-600 text-white rounded-lg hover:bg-danger-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                       Ablehnen
                     </button>
