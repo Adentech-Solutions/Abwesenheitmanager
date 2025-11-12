@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import AuthProvider from '@/components/providers/AuthProvider';
+import Providers from '@/components/providers/Providers';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Absence Management',
-  description: 'Manage employee absences and vacations',
+  title: 'Absence Manager - Urlaubsverwaltung',
+  description: 'Moderne Urlaubsverwaltung für Ihr Unternehmen',
 };
 
 export default function RootLayout({
@@ -16,9 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="de">
+    <html lang="de" suppressHydrationWarning>
       <body className={inter.className}>
-        <AuthProvider>{children}</AuthProvider>
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );
