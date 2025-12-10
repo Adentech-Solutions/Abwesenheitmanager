@@ -13,6 +13,7 @@ export interface AnalyticsQuery {
   year?: number;
   month?: number;
   department?: string;
+  managerId?: string; // ⭐ NEU
   startDate?: Date;
   endDate?: Date;
 }
@@ -56,12 +57,20 @@ export async function calculateAnalytics(query: AnalyticsQuery) {
 
   if (query.department) {
     // Get users from department
-    const departmentUsers = await User.find({ 
+    const departmentUsers = await User.find({
       department: query.department,
-      isActive: true 
+      isActive: true
     });
     const userEmails = departmentUsers.map(u => u.email);
     absenceQuery.userEmail = { $in: userEmails };
+  } else if (query.managerId) {
+    // ⭐ NEU: Filter by manager's team
+    const teamMembers = await User.find({
+      managerId: query.managerId,
+      isActive: true
+    });
+    const teamEmails = teamMembers.map(u => u.email);
+    absenceQuery.userEmail = { $in: teamEmails };
   }
 
   const absences = await Absence.find(absenceQuery);
@@ -90,7 +99,7 @@ export async function calculateAnalytics(query: AnalyticsQuery) {
   // Compare to last month
   const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
   const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
-  
+
   const lastMonthStart = startOfMonth(new Date(lastMonthYear, lastMonth - 1));
   const lastMonthEnd = endOfMonth(new Date(lastMonthYear, lastMonth - 1));
 
@@ -102,8 +111,8 @@ export async function calculateAnalytics(query: AnalyticsQuery) {
 
   const lastMonthTotal = lastMonthAbsences.length;
   const totalChange = totalAbsences - lastMonthTotal;
-  const percentageChange = lastMonthTotal > 0 
-    ? ((totalChange / lastMonthTotal) * 100) 
+  const percentageChange = lastMonthTotal > 0
+    ? ((totalChange / lastMonthTotal) * 100)
     : 0;
 
   const lastMonthSick = lastMonthAbsences.filter(a => a.type === 'sick').length;
@@ -120,6 +129,7 @@ export async function calculateAnalytics(query: AnalyticsQuery) {
     year: currentYear,
     month: currentMonth,
     department: query.department,
+    managerId: query.managerId, // ⭐ NEU
     totalAbsences,
     totalDays,
     averageDuration: Math.round(averageDuration * 10) / 10,
@@ -144,16 +154,16 @@ export async function getAnalyticsByDepartment(
 ): Promise<DepartmentStats[]> {
   await connectDB();
 
-  const startDate = month 
+  const startDate = month
     ? startOfMonth(new Date(year, month - 1))
     : startOfYear(new Date(year, 0));
-  
+
   const endDate = month
     ? endOfMonth(new Date(year, month - 1))
     : endOfYear(new Date(year, 0));
 
   // Get all departments
-  const departments = await User.distinct('department', { 
+  const departments = await User.distinct('department', {
     isActive: true,
     department: { $ne: null, $exists: true }
   }).then(depts => depts.filter(d => d !== ''));
@@ -161,13 +171,13 @@ export async function getAnalyticsByDepartment(
   const stats: DepartmentStats[] = [];
 
   for (const dept of departments) {
-    const deptUsers = await User.find({ 
+    const deptUsers = await User.find({
       department: dept,
-      isActive: true 
+      isActive: true
     });
-    
+
     const userEmails = deptUsers.map(u => u.email);
-    
+
     const absences = await Absence.find({
       userEmail: { $in: userEmails },
       startDate: { $gte: startDate },
@@ -192,8 +202,8 @@ export async function getAnalyticsByDepartment(
       department: dept,
       totalAbsences: absences.length,
       totalDays,
-      averageDuration: absences.length > 0 
-        ? Math.round((totalDays / absences.length) * 10) / 10 
+      averageDuration: absences.length > 0
+        ? Math.round((totalDays / absences.length) * 10) / 10
         : 0,
       vacationRate: totalVacationDaysAvailable > 0
         ? Math.round((vacationDays / totalVacationDaysAvailable) * 100)
@@ -241,8 +251,8 @@ export async function getSickLeaveTrends(
     if (trends.length > 0) {
       const lastMonthDays = trends[trends.length - 1].sickDays;
       const change = sickDays - lastMonthDays;
-      percentageChange = lastMonthDays > 0 
-        ? Math.round((change / lastMonthDays) * 100) 
+      percentageChange = lastMonthDays > 0
+        ? Math.round((change / lastMonthDays) * 100)
         : 0;
 
       if (percentageChange > 10) trend = 'up';
@@ -276,7 +286,7 @@ function findPeakDays(absences: any[]): Array<{ date: Date; absenceCount: number
       const currentDay = new Date(start);
       currentDay.setDate(start.getDate() + i);
       const dayKey = currentDay.toISOString().split('T')[0];
-      
+
       dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + 1);
     }
   });
@@ -301,7 +311,7 @@ async function calculateVacationScore(department?: string): Promise<number> {
   if (department) query.department = department;
 
   const users = await User.find(query);
-  
+
   if (users.length === 0) return 0;
 
   const totalVacationDays = users.reduce(
@@ -328,6 +338,7 @@ export async function saveAnalytics(analyticsData: any) {
     year: analyticsData.year,
     month: analyticsData.month,
     department: analyticsData.department || null,
+    managerId: analyticsData.managerId || null, // ⭐ NEU
   };
 
   await AbsenceAnalytics.findOneAndUpdate(
@@ -349,7 +360,11 @@ export async function getCachedAnalytics(query: AnalyticsQuery) {
   };
 
   if (query.department) filter.department = query.department;
-  else filter.department = { $exists: false };
+  else if (query.managerId) filter.managerId = query.managerId; // ⭐ NEU
+  else {
+    filter.department = { $exists: false };
+    filter.managerId = { $exists: false };
+  }
 
   let analytics = await AbsenceAnalytics.findOne(filter);
 

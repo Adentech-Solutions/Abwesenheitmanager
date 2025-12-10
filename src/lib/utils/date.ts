@@ -1,8 +1,8 @@
-import { 
-  format, 
-  differenceInDays, 
-  isWeekend, 
-  addDays, 
+import {
+  format,
+  differenceInDays,
+  isWeekend,
+  addDays,
   isSameDay,
   parseISO,
   startOfDay,
@@ -10,13 +10,19 @@ import {
 } from 'date-fns';
 import { de } from 'date-fns/locale';
 
-export function calculateWorkingDays(startDate: Date, endDate: Date, isHalfDay: boolean = false): number {
+export function calculateWorkingDays(startDate: Date, endDate: Date, isHalfDay: boolean = false, holidays: Date[] = []): number {
   let days = 0;
   let currentDate = startOfDay(startDate);
   const end = startOfDay(endDate);
 
+  // Convert holidays to timestamps for easier comparison
+  const holidayTimestamps = new Set(holidays.map(h => startOfDay(h).getTime()));
+
   while (currentDate <= end) {
-    if (!isWeekend(currentDate)) {
+    const isWeekendDay = isWeekend(currentDate);
+    const isHolidayDay = holidayTimestamps.has(currentDate.getTime());
+
+    if (!isWeekendDay && !isHolidayDay) {
       days++;
     }
     currentDate = addDays(currentDate, 1);

@@ -13,32 +13,44 @@ import { getUserDirectReports } from '@/lib/graph-client';
 import { sendApprovalNotification } from '@/lib/teams-bot';
 import { sendNotificationEmail, generateApprovalEmailBody } from '@/lib/email';
 import { formatAbsenceType } from '@/lib/utils/format';
-import { generateAutoReplyMessage } from '@/lib/utils/autoReplyGenerator';  // ⭐ NEU
+import { generateAutoReplyMessage } from '@/lib/utils/autoReplyGenerator';
+import { requireRole, canViewUserData } from '@/lib/rbac';
 
 // GET /api/absences - List absences
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // 🔒 Security: Check if user is authenticated and get their role
+    const { user, dbUser } = await requireRole(['employee', 'manager', 'admin']);
 
     await connectDB();
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
-    const userId = searchParams.get('userId');
+    const targetUserId = searchParams.get('userId');
 
     const query: any = {};
     if (status) query.status = status;
-    if (userId) query.userId = userId;
-    else query.userEmail = session.user.email;
+
+    // 🔒 Security: Check data access permissions
+    if (targetUserId) {
+      const canView = await canViewUserData(dbUser, targetUserId);
+      if (!canView) {
+        return NextResponse.json({ error: 'Forbidden: Cannot view this user\'s data' }, { status: 403 });
+      }
+      query.userId = targetUserId;
+    } else {
+      // Default to own data if no userId specified
+      query.userEmail = user.email;
+    }
 
     const absences = await Absence.find(query).sort({ startDate: -1 }).limit(100);
 
     return NextResponse.json({ absences });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching absences:', error);
+    if (error.message === 'Unauthorized' || error.message.startsWith('Forbidden')) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     return NextResponse.json({ error: 'Failed to fetch absences' }, { status: 500 });
   }
 }
@@ -90,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     // ⭐ NEU: Auto-Reply Settings vorbereiten
     console.log('🟦 6.5. Preparing auto-reply settings...');
-    
+
     // Default Werte aus Body oder Smart Defaults
     const autoReplyEnabled = validated.autoReplySettings?.enabled !== false;  // Default: true
     const hasSubstitute = validated.autoReplySettings?.hasSubstitute || false;
@@ -130,7 +142,7 @@ export async function POST(request: NextRequest) {
       status: validated.type === 'sick' ? 'approved' : 'pending',
       reason: validated.reason,
       conflictWarning: false,
-      
+
       // ⭐ NEU: Auto-Reply Settings mit Smart Defaults
       autoReplySettings: {
         enabled: autoReplyEnabled,

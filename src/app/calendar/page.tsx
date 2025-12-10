@@ -14,19 +14,18 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Calendar as CalendarIcon, 
-  ChevronLeft, 
+import {
+  Calendar as CalendarIcon,
+  ChevronLeft,
   ChevronRight,
   Users,
   Filter,
   Download
 } from 'lucide-react';
-import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
   eachDayOfInterval,
   isSameMonth,
   isToday,
@@ -35,7 +34,6 @@ import {
   subMonths,
   startOfWeek,
   endOfWeek,
-  isSameDay
 } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -54,11 +52,21 @@ interface Absence {
 export default function CalendarPage() {
   const { data: session } = useSession();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<'month' | 'week'>('month');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
 
   const userRole = (session?.user as any)?.role;
   const isManagerOrAdmin = userRole === 'manager' || userRole === 'admin';
+
+  // Fetch departments
+  const { data: departmentsData } = useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const res = await fetch('/api/departments');
+      if (!res.ok) return { departments: [] };
+      return res.json();
+    },
+    enabled: isManagerOrAdmin,
+  });
 
   // Fetch team absences
   const { data: absencesData, isLoading } = useQuery({
@@ -66,7 +74,7 @@ export default function CalendarPage() {
     queryFn: async () => {
       const startDate = startOfMonth(currentDate);
       const endDate = endOfMonth(currentDate);
-      
+
       let url = `/api/absences/team?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
       if (selectedDepartment !== 'all') {
         url += `&department=${selectedDepartment}`;
@@ -171,7 +179,7 @@ export default function CalendarPage() {
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              
+
               <div className="text-center min-w-[180px]">
                 <h2 className="text-lg font-semibold text-gray-900">
                   {format(currentDate, 'MMMM yyyy', { locale: de })}
@@ -197,10 +205,16 @@ export default function CalendarPage() {
 
             {/* Actions */}
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-2" />
-                Filter
-              </Button>
+              <select
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm py-2 px-3"
+                value={selectedDepartment}
+                onChange={(e) => setSelectedDepartment(e.target.value)}
+              >
+                <option value="all">Alle Abteilungen</option>
+                {departmentsData?.departments?.map((dept: string) => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
               <Button variant="outline" size="sm">
                 <Download className="h-4 w-4 mr-2" />
                 Export
@@ -319,7 +333,7 @@ export default function CalendarPage() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Abwesenheiten in {format(currentDate, 'MMMM yyyy', { locale: de })}
           </h3>
-          
+
           {absences.length === 0 ? (
             <div className="text-center py-8 text-gray-600">
               <Users className="h-12 w-12 mx-auto mb-3 opacity-20" />
@@ -357,8 +371,8 @@ export default function CalendarPage() {
                     <div className="flex items-center gap-2">
                       <Badge variant={
                         absence.type === 'vacation' ? 'info' :
-                        absence.type === 'sick' ? 'danger' :
-                        absence.type === 'training' ? 'success' : 'warning'
+                          absence.type === 'sick' ? 'danger' :
+                            absence.type === 'training' ? 'success' : 'warning'
                       }>
                         {getAbsenceTypeLabel(absence.type)}
                       </Badge>

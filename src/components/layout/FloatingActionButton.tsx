@@ -90,24 +90,6 @@ export default function FloatingActionButton() {
           <Plus className="h-8 w-8" />
         </button>
       </div>
-
-      {/* Sheet for Absence Form (placeholder) */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="sm:max-w-[600px]">
-          <SheetHeader>
-            <SheetTitle>Neuer Antrag</SheetTitle>
-            <SheetDescription>
-              Erstelle einen neuen Abwesenheitsantrag
-            </SheetDescription>
-          </SheetHeader>
-          {/* Form wird hier später integriert */}
-          <div className="py-4">
-            <p className="text-sm text-gray-600">
-              Formular wird geladen...
-            </p>
-          </div>
-        </SheetContent>
-      </Sheet>
     </>
   );
 }

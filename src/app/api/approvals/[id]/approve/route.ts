@@ -9,6 +9,8 @@ import User from '@/models/User';
 import { createCalendarEvent, setAutomaticReplies, mapAutoReplySettings } from '@/lib/graph-client';
 import { sendApprovalResultNotification } from '@/lib/teams-bot';
 import { formatAbsenceType } from '@/lib/utils/format';
+import { auditLog } from '@/lib/middleware/audit';
+import { requireRole } from '@/lib/rbac';
 
 export async function POST(
   request: NextRequest,
@@ -16,18 +18,11 @@ export async function POST(
 ) {
   try {
     console.log('✅ POST /api/approvals/[id]/approve - START');
-    
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+
+    // 🔒 Security: Require Manager or Admin role
+    const { user: sessionUser, dbUser: manager } = await requireRole(['manager', 'admin']);
 
     await connectDB();
-
-    const manager = await User.findOne({ email: session.user.email });
-    if (!manager) {
-      return NextResponse.json({ error: 'Manager not found' }, { status: 404 });
-    }
 
     console.log('✅ Manager:', manager.email);
 
@@ -45,6 +40,17 @@ export async function POST(
     // Approve absence
     await absence.approve(manager.entraId, manager.email);
     console.log('✅ Absence approved in DB');
+
+    // 📝 Audit Log
+    await auditLog(
+      manager.entraId,
+      manager.email,
+      'approved',
+      'absence',
+      absence._id.toString(),
+      [{ field: 'status', oldValue: 'pending', newValue: 'approved' }],
+      request
+    );
 
     // Update user vacation balance
     if (absence.type === 'vacation') {
@@ -111,11 +117,11 @@ export async function POST(
           internal: cleanSettings.recipients?.internal,
           external: cleanSettings.recipients?.external,
         });
-        
+
         if (cleanSettings.hasSubstitute && cleanSettings.substituteInfo) {
           console.log('👤 With substitute:', cleanSettings.substituteInfo.email);
         }
-        
+
       } catch (error: any) {
         console.error('❌ Error setting auto-reply:', error);
         console.error('❌ Error details:', error.body || error.message);
@@ -148,16 +154,19 @@ export async function POST(
 
     console.log('✅ POST /api/approvals/[id]/approve - SUCCESS');
 
-    return NextResponse.json({ 
-      absence, 
-      message: 'Absence approved' 
+    return NextResponse.json({
+      absence,
+      message: 'Absence approved'
     });
-    
+
   } catch (error: any) {
     console.error('❌ Error approving absence:', error);
-    return NextResponse.json({ 
+    if (error.message === 'Unauthorized' || error.message.startsWith('Forbidden')) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    return NextResponse.json({
       error: 'Failed to approve absence',
-      details: error.message 
+      details: error.message
     }, { status: 500 });
   }
 }

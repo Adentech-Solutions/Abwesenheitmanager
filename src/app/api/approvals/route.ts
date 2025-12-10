@@ -1,46 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRole, getTeamMemberEmails } from '@/lib/rbac';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
-import User from '@/models/User';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // 🔒 Security: Require Manager or Admin role
+    const { dbUser } = await requireRole(['manager', 'admin']);
 
     await connectDB();
 
-    // Get current user
-    const currentUser = await User.findOne({ email: session.user.email });
-    if (!currentUser) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    let query: any = { status: 'pending' };
+
+    // 🔒 Security: Managers only see their team's requests
+    if (dbUser.role === 'manager') {
+      const teamEmails = await getTeamMemberEmails(dbUser.entraId);
+      query.userEmail = { $in: teamEmails };
     }
+    // Admins see all pending requests (no additional filter needed)
 
-    console.log('📋 Fetching approvals for manager:', currentUser.email);
+    const pendingApprovals = await Absence.find(query).sort({ createdAt: -1 });
 
-    // Find all users where current user is manager
-    const teamMembers = await User.find({ managerId: currentUser.entraId });
-    const teamEmails = teamMembers.map((u) => u.email);
-
-    console.log('👥 Team members:', teamMembers.length);
-    console.log('📧 Team emails:', teamEmails);
-
-    // Get pending absences for team members
-    const pendingApprovals = await Absence.find({
-      userEmail: { $in: teamEmails },
-      status: 'pending',
-    }).sort({ createdAt: -1 });
-
-    console.log('📋 Found pending approvals:', pendingApprovals.length);
-
-    // ⚠️ WICHTIG: Frontend erwartet "absences" nicht "approvals"
     return NextResponse.json({ absences: pendingApprovals });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching approvals:', error);
+    if (error.message === 'Unauthorized' || error.message.startsWith('Forbidden')) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     return NextResponse.json({ error: 'Failed to fetch approvals' }, { status: 500 });
   }
 }

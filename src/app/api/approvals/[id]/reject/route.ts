@@ -6,6 +6,8 @@ import Absence from '@/models/Absence';
 import User from '@/models/User';
 import { sendApprovalResultNotification } from '@/lib/teams-bot';
 import { formatAbsenceType } from '@/lib/utils/format';
+import { auditLog } from '@/lib/middleware/audit';
+import { requireRole } from '@/lib/rbac';
 
 export async function POST(
   request: NextRequest,
@@ -13,21 +15,14 @@ export async function POST(
 ) {
   try {
     console.log('❌ POST /api/approvals/[id]/reject - START');
-    
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+
+    // 🔒 Security: Require Manager or Admin role
+    const { user: sessionUser, dbUser: manager } = await requireRole(['manager', 'admin']);
 
     await connectDB();
 
     const body = await request.json();
     const { reason } = body;
-
-    const manager = await User.findOne({ email: session.user.email });
-    if (!manager) {
-      return NextResponse.json({ error: 'Manager not found' }, { status: 404 });
-    }
 
     console.log('❌ Manager:', manager.email);
 
@@ -45,6 +40,17 @@ export async function POST(
     // Reject absence
     await absence.reject(manager.entraId, manager.email, reason || 'Keine Begründung angegeben');
     console.log('❌ Absence rejected in DB');
+
+    // 📝 Audit Log
+    await auditLog(
+      manager.entraId,
+      manager.email,
+      'rejected',
+      'absence',
+      absence._id.toString(),
+      [{ field: 'status', oldValue: 'pending', newValue: 'rejected' }],
+      request
+    );
 
     // Notify employee via Teams
     try {
@@ -68,8 +74,11 @@ export async function POST(
     console.log('❌ POST /api/approvals/[id]/reject - SUCCESS');
 
     return NextResponse.json({ absence, message: 'Absence rejected' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error rejecting absence:', error);
+    if (error.message === 'Unauthorized' || error.message.startsWith('Forbidden')) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     return NextResponse.json({ error: 'Failed to reject absence' }, { status: 500 });
   }
 }

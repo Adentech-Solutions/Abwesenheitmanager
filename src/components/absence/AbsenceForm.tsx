@@ -7,19 +7,33 @@ import Select from '../ui/Select';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 
-export default function AbsenceForm() {
+export default function AbsenceForm({ initialType = 'vacation' }: { initialType?: string }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    type: 'vacation',
+    type: initialType,
     startDate: '',
     endDate: '',
     isHalfDay: false,
     reason: '',
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+    if (!formData.startDate) newErrors.startDate = 'Startdatum ist erforderlich';
+    if (!formData.endDate) newErrors.endDate = 'Enddatum ist erforderlich';
+    if (formData.startDate && formData.endDate && new Date(formData.startDate) > new Date(formData.endDate)) {
+      newErrors.endDate = 'Enddatum muss nach Startdatum liegen';
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
+
     setIsSubmitting(true);
 
     try {
@@ -29,12 +43,15 @@ export default function AbsenceForm() {
         body: JSON.stringify(formData),
       });
 
-      if (!response.ok) throw new Error('Failed to create absence');
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create absence');
+      }
 
       router.push('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating absence:', error);
-      alert('Fehler beim Erstellen der Abwesenheit');
+      alert(error.message || 'Fehler beim Erstellen der Abwesenheit');
     } finally {
       setIsSubmitting(false);
     }
@@ -63,6 +80,7 @@ export default function AbsenceForm() {
             value={formData.startDate}
             onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
             required
+            error={errors.startDate}
           />
           <Input
             type="date"
@@ -70,6 +88,7 @@ export default function AbsenceForm() {
             value={formData.endDate}
             onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
             required
+            error={errors.endDate}
           />
         </div>
 
