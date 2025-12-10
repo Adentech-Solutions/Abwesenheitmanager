@@ -195,6 +195,7 @@ export async function POST(request: NextRequest) {
             manager.entraId,   // ← AN: Manager (Adele)
             manager.email,
             {
+              id: absence._id.toString(), // Added for Magic Links
               employeeName: absence.userName,
               type: formatAbsenceType(absence.type),
               startDate: new Date(absence.startDate).toLocaleDateString('de-DE'),

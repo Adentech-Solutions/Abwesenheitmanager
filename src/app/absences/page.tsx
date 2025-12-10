@@ -56,14 +56,14 @@ export default function AbsencesPage() {
     queryFn: async () => {
       let url = '/api/absences';
       const params = new URLSearchParams();
-      
+
       if (selectedStatus !== 'all') {
         params.append('status', selectedStatus);
       }
       if (selectedType !== 'all') {
         params.append('type', selectedType);
       }
-      
+
       if (params.toString()) {
         url += `?${params.toString()}`;
       }
@@ -140,9 +140,9 @@ export default function AbsencesPage() {
     }
   };
 
-  // Delete absence
+  // Delete/Cancel absence
   const handleDelete = async (absenceId: string) => {
-    if (!confirm('Möchtest du diese Abwesenheit wirklich löschen?')) {
+    if (!confirm('Möchtest du diese Abwesenheit wirklich stornieren?')) {
       return;
     }
 
@@ -155,7 +155,7 @@ export default function AbsencesPage() {
         throw new Error('Failed to delete absence');
       }
 
-      toast.success('Abwesenheit gelöscht');
+      toast.success('Abwesenheit storniert');
       queryClient.invalidateQueries({ queryKey: ['absences'] });
     } catch (error) {
       console.error('Error deleting absence:', error);
@@ -362,14 +362,16 @@ export default function AbsencesPage() {
                   </div>
 
                   {/* Actions */}
-                  {absence.status === 'pending' && (
+                  {(absence.status === 'pending' || absence.status === 'approved') && (
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleDelete(absence._id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Stornieren
                       </Button>
                     </div>
                   )}

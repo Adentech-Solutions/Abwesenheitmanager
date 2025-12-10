@@ -75,7 +75,7 @@ export default function CalendarPage() {
       const startDate = startOfMonth(currentDate);
       const endDate = endOfMonth(currentDate);
 
-      let url = `/api/absences/team?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
+      let url = `/api/calendar/team?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
       if (selectedDepartment !== 'all') {
         url += `&department=${selectedDepartment}`;
       }
@@ -86,7 +86,7 @@ export default function CalendarPage() {
       }
       return response.json();
     },
-    enabled: isManagerOrAdmin,
+    enabled: !!session, // Allow all authenticated users
   });
 
   const absences: Absence[] = absencesData?.absences || [];
@@ -137,21 +137,7 @@ export default function CalendarPage() {
   const goToNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const goToToday = () => setCurrentDate(new Date());
 
-  if (!isManagerOrAdmin) {
-    return (
-      <DashboardLayout>
-        <div className="text-center py-12">
-          <CalendarIcon className="h-16 w-16 mx-auto text-gray-400 mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Keine Berechtigung
-          </h2>
-          <p className="text-gray-600">
-            Nur Manager und Administratoren können den Team-Kalender einsehen.
-          </p>
-        </div>
-      </DashboardLayout>
-    );
-  }
+
 
   return (
     <DashboardLayout>

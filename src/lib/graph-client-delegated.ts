@@ -8,7 +8,7 @@ import { authOptions } from './auth';
  */
 export async function getDelegatedGraphClient() {
   const session = await getServerSession(authOptions);
-  
+
   if (!session?.accessToken) {
     throw new Error('No access token available. User must be authenticated.');
   }
@@ -28,7 +28,7 @@ export async function sendTeamsMessageDelegated(
   message: string
 ) {
   const client = await getDelegatedGraphClient();
-  
+
   try {
     console.log('💬 Sending Teams message (delegated)...');
     console.log('💬 To:', toUserId);
@@ -62,12 +62,16 @@ export async function sendTeamsMessageDelegated(
 
     // Option 2: Create new chat
     console.log('🔄 Creating new 1:1 chat...');
-    
-    const session = await getServerSession(authOptions);
-    const fromUserId = session?.user?.id;
 
-    if (!fromUserId) {
-      throw new Error('Could not get current user ID from session');
+    const session = await getServerSession(authOptions);
+    const fromUserId = session?.user?.id; // Note: session.user.id needs to be available. Assuming it is per previous code context.
+
+    // If session.user.id is not available, we might need to fetch /me. 
+    // But let's assume session population is correct or we use `client.api('/me')`
+    let myId = fromUserId;
+    if (!myId) {
+      const me = await client.api('/me').select('id').get();
+      myId = me.id;
     }
 
     const newChat = await client
@@ -78,7 +82,7 @@ export async function sendTeamsMessageDelegated(
           {
             '@odata.type': '#microsoft.graph.aadUserConversationMember',
             roles: ['owner'],
-            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${fromUserId}')`,
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${myId}')`,
           },
           {
             '@odata.type': '#microsoft.graph.aadUserConversationMember',
@@ -104,5 +108,85 @@ export async function sendTeamsMessageDelegated(
   } catch (error) {
     console.error('❌ Error sending Teams message (delegated):', error);
     throw error;
+  }
+}
+
+/**
+ * Send an Adaptive Card to a user
+ */
+export async function sendTeamsAdaptiveCard(
+  toUserId: string,
+  cardContent: any
+) {
+  const client = await getDelegatedGraphClient();
+
+  // Prepare payload
+  const payload = {
+    body: {
+      contentType: 'html',
+      content: '<attachment id="card"></attachment>'
+    },
+    attachments: [
+      {
+        id: 'card',
+        contentType: 'application/vnd.microsoft.card.adaptive',
+        content: JSON.stringify(cardContent) // Content must be a stringified JSON
+      }
+    ]
+  };
+
+  try {
+    console.log('💬 Sending Teams Adaptive Card (delegated)...');
+
+    // 1. Try existing chat
+    try {
+      const chatsResponse = await client
+        .api('/me/chats')
+        .filter(`members/any(m: m/userId eq '${toUserId}')`)
+        .get();
+
+      if (chatsResponse.value && chatsResponse.value.length > 0) {
+        const chatId = chatsResponse.value[0].id;
+        await client
+          .api(`/chats/${chatId}/messages`)
+          .post(payload);
+
+        return { success: true };
+      }
+    } catch (e) {
+      console.log('⚠️ Could not find existing chat');
+    }
+
+    // 2. Create new chat (Reuse logic or keep it simple)
+    // We need to fetch 'me' if session id is missing
+    const me = await client.api('/me').select('id').get();
+
+    const newChat = await client
+      .api('/chats')
+      .post({
+        chatType: 'oneOnOne',
+        members: [
+          {
+            '@odata.type': '#microsoft.graph.aadUserConversationMember',
+            roles: ['owner'],
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${me.id}')`,
+          },
+          {
+            '@odata.type': '#microsoft.graph.aadUserConversationMember',
+            roles: ['owner'],
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${toUserId}')`,
+          }
+        ]
+      });
+
+    await client
+      .api(`/chats/${newChat.id}/messages`)
+      .post(payload);
+
+    return { success: true };
+
+  } catch (error) {
+    console.error('❌ Failed to send Adaptive Card:', error);
+    return { success: false, error };
   }
 }

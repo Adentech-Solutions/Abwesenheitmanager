@@ -4,30 +4,27 @@ import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
 import User from '@/models/User';
+import { requireRole } from '@/lib/rbac';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // 🔒 Security: RBAC check
+    const { user, dbUser } = await requireRole(['employee', 'manager', 'admin']);
 
     await connectDB();
 
-    const user = await User.findOne({ email: session.user.email });
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Use dbUser from requireRole instead of refetching
+    // const user = await User.findOne({ email: session.user.email }); // Removed redundant fetch
 
     // Get stats
     const totalAbsences = await Absence.countDocuments({ userEmail: user.email });
-    const pendingAbsences = await Absence.countDocuments({ 
-      userEmail: user.email, 
-      status: 'pending' 
+    const pendingAbsences = await Absence.countDocuments({
+      userEmail: user.email,
+      status: 'pending'
     });
-    const approvedAbsences = await Absence.countDocuments({ 
-      userEmail: user.email, 
-      status: 'approved' 
+    const approvedAbsences = await Absence.countDocuments({
+      userEmail: user.email,
+      status: 'approved'
     });
 
     // Get upcoming absences

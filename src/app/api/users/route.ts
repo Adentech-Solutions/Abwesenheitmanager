@@ -3,13 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
+import { requireRole } from '@/lib/rbac';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // 🔒 Security: Only Admin and Manager can list users
+    // Regular employees should NOT be able to see the full user list
+    const { user, dbUser } = await requireRole(['admin', 'manager']);
 
     await connectDB();
 

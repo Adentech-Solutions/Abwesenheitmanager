@@ -1,4 +1,8 @@
-import { sendTeamsMessageDelegated } from './graph-client-delegated';
+import { sendTeamsMessageDelegated, sendTeamsAdaptiveCard } from './graph-client-delegated';
+import { createAbsenceRequestCard, createStatusNotificationCard } from './adaptive-cards';
+import { generateActionToken } from '@/lib/tokens';
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 /**
  * Send approval notification to manager using delegated permissions
@@ -9,28 +13,47 @@ export async function sendApprovalNotification(
   managerId: string,
   managerEmail: string,
   absenceDetails: {
+    id: string; // Added ID for magic links
     employeeName: string;
     type: string;
     startDate: string;
     endDate: string;
     totalDays: number;
     approvalLink: string;
+    reason?: string;
   }
 ) {
-  const message = `
-    <h3>🏖️ Neuer Abwesenheitsantrag</h3>
-    <p><strong>Von:</strong> ${absenceDetails.employeeName}</p>
-    <p><strong>Art:</strong> ${absenceDetails.type}</p>
-    <p><strong>Zeitraum:</strong> ${absenceDetails.startDate} - ${absenceDetails.endDate}</p>
-    <p><strong>Dauer:</strong> ${absenceDetails.totalDays} Tage</p>
-    <p><a href="${absenceDetails.approvalLink}">Jetzt genehmigen</a></p>
-  `;
+  // Generate Magic Links
+  const approveToken = generateActionToken({
+    absenceId: absenceDetails.id,
+    action: 'approve',
+    approverId: managerId // The manager who receives this is the approver
+  });
+
+  const rejectToken = generateActionToken({
+    absenceId: absenceDetails.id,
+    action: 'reject',
+    approverId: managerId
+  });
+
+  const approveUrl = `${APP_URL}/api/approvals/quick?token=${approveToken}`;
+  const rejectUrl = `${APP_URL}/api/approvals/quick?token=${rejectToken}`;
+
+  const card = createAbsenceRequestCard({
+    ...absenceDetails,
+    actions: {
+      approveUrl,
+      rejectUrl,
+      viewUrl: absenceDetails.approvalLink
+    }
+  });
 
   try {
-    await sendTeamsMessageDelegated(managerId, message);
+    await sendTeamsAdaptiveCard(managerId, card);
     return { success: true };
   } catch (error) {
     console.error('Failed to send Teams notification:', error);
+    // Fallback? No, just fail for now.
     return { success: false, error };
   }
 }
@@ -49,18 +72,13 @@ export async function sendApprovalResultNotification(
     reason?: string;
   }
 ) {
-  const statusEmoji = status === 'approved' ? '✅' : '❌';
-  const statusText = status === 'approved' ? 'genehmigt' : 'abgelehnt';
-
-  const message = `
-    <h3>${statusEmoji} Abwesenheitsantrag ${statusText}</h3>
-    <p><strong>Art:</strong> ${absenceDetails.type}</p>
-    <p><strong>Zeitraum:</strong> ${absenceDetails.startDate} - ${absenceDetails.endDate}</p>
-    ${absenceDetails.reason ? `<p><strong>Grund:</strong> ${absenceDetails.reason}</p>` : ''}
-  `;
+  const card = createStatusNotificationCard({
+    status,
+    ...absenceDetails
+  });
 
   try {
-    await sendTeamsMessageDelegated(toUserId, message);
+    await sendTeamsAdaptiveCard(toUserId, card);
     return { success: true };
   } catch (error) {
     console.error('Failed to send Teams notification:', error);

@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { CalendarIcon, LayoutDashboard, LogOut, Settings, User } from 'lucide-react';
+import { CalendarIcon, LayoutDashboard, LogOut, Settings, User, FileText } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export default function AppNavbar() {
@@ -23,6 +23,7 @@ export default function AppNavbar() {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Abwesenheiten', href: '/absences', icon: FileText },
     { name: 'Kalender', href: '/calendar', icon: CalendarIcon },
   ];
 
@@ -69,7 +70,7 @@ export default function AppNavbar() {
             {navigation.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
-              
+
               return (
                 <Link
                   key={item.href}
