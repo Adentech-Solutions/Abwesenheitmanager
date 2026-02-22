@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import DashboardLayout from '@/components/layout/DashboardLayout';
 
 interface Absence {
   _id: string;
@@ -33,7 +34,7 @@ export default function ManagerDashboard() {
   // Redirect if not manager
   useEffect(() => {
     if (status === 'loading') return;
-    
+
     if (!session) {
       router.push('/');
       return;
@@ -57,7 +58,7 @@ export default function ManagerDashboard() {
     try {
       setLoading(true);
       const response = await fetch('/api/approvals?status=pending');
-      
+
       if (response.ok) {
         const data = await response.json();
         setPendingApprovals(data.absences || []);
@@ -72,15 +73,15 @@ export default function ManagerDashboard() {
   const handleQuickApproval = async (absenceId: string, action: 'approved' | 'rejected') => {
     try {
       setProcessingId(absenceId);
-      
-      const endpoint = action === 'approved' 
+
+      const endpoint = action === 'approved'
         ? `/api/approvals/${absenceId}/approve`
         : `/api/approvals/${absenceId}/reject`;
-      
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: action === 'rejected' 
+        body: action === 'rejected'
           ? JSON.stringify({ reason: 'Vom Manager abgelehnt' })
           : JSON.stringify({}),
       });
@@ -129,8 +130,8 @@ export default function ManagerDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <DashboardLayout>
+      <div>
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
@@ -403,6 +404,6 @@ export default function ManagerDashboard() {
           </div>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }

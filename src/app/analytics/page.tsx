@@ -6,7 +6,7 @@
 // ========================================
 
 import React, { useState, useEffect } from 'react';
-import Navbar from '@/components/layout/Navbar';
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -102,21 +102,17 @@ export default function AnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <p className="text-gray-600">Laden...</p>
-          </div>
-        </main>
-      </div>
+      <DashboardLayout>
+        <div className="text-center">
+          <p className="text-gray-600">Laden...</p>
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <DashboardLayout>
+      <div>
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -254,10 +250,10 @@ export default function AnalyticsPage() {
                     {analytics.peakDays.map((peak, index) => (
                       <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                         <span className="text-gray-700">
-                          {new Date(peak.date).toLocaleDateString('de-DE', { 
-                            weekday: 'short', 
-                            day: '2-digit', 
-                            month: 'short' 
+                          {new Date(peak.date).toLocaleDateString('de-DE', {
+                            weekday: 'short',
+                            day: '2-digit',
+                            month: 'short'
                           })}
                         </span>
                         <Badge variant="warning">{peak.absenceCount} Abwesende</Badge>
@@ -343,11 +339,10 @@ export default function AnalyticsPage() {
                 <div key={index} className="p-4 border border-gray-200 rounded-lg">
                   <div className="text-xs text-gray-500 uppercase">{trend.month}</div>
                   <div className="text-2xl font-bold text-gray-900 mt-1">{trend.sickDays}</div>
-                  <div className={`text-sm mt-1 ${
-                    trend.trend === 'up' ? 'text-danger-600' :
-                    trend.trend === 'down' ? 'text-success-600' :
-                    'text-gray-600'
-                  }`}>
+                  <div className={`text-sm mt-1 ${trend.trend === 'up' ? 'text-danger-600' :
+                      trend.trend === 'down' ? 'text-success-600' :
+                        'text-gray-600'
+                    }`}>
                     {trend.trend === 'up' && '📈 '}
                     {trend.trend === 'down' && '📉 '}
                     {trend.trend === 'stable' && '➡️ '}
@@ -368,7 +363,7 @@ export default function AnalyticsPage() {
             📥 CSV Export
           </Button>
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }

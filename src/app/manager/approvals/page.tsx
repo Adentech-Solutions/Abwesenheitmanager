@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import DashboardLayout from '@/components/layout/DashboardLayout';
 
 interface Absence {
   _id: string;
@@ -36,7 +37,7 @@ export default function ManagerApprovalsPage() {
   // Redirect if not manager
   useEffect(() => {
     if (status === 'loading') return;
-    
+
     if (!session) {
       router.push('/');
       return;
@@ -60,9 +61,9 @@ export default function ManagerApprovalsPage() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await fetch('/api/approvals?status=pending');
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch absences');
       }
@@ -80,15 +81,15 @@ export default function ManagerApprovalsPage() {
   const handleApproval = async (absenceId: string, action: 'approved' | 'rejected') => {
     try {
       setProcessingId(absenceId);
-      
-      const endpoint = action === 'approved' 
+
+      const endpoint = action === 'approved'
         ? `/api/approvals/${absenceId}/approve`
         : `/api/approvals/${absenceId}/reject`;
-      
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: action === 'rejected' 
+        body: action === 'rejected'
           ? JSON.stringify({ reason: 'Vom Manager abgelehnt' })
           : JSON.stringify({}),
       });
@@ -155,8 +156,8 @@ export default function ManagerApprovalsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <DashboardLayout>
+      <div>
         {/* Header with Back Button */}
         <div className="mb-8">
           <button
@@ -302,6 +303,6 @@ export default function ManagerApprovalsPage() {
           </div>
         )}
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
