@@ -9,7 +9,7 @@ import User from '@/models/User';
 import { calculateWorkingDays } from '@/lib/utils/date';
 import { absenceSchema } from '@/lib/utils/validation';
 import { checkAbsenceConflicts } from '@/lib/utils/conflicts';
-import { getUserDirectReports } from '@/lib/graph-client';
+import { getUserDirectReports, getGraphUser } from '@/lib/graph-client';
 import { sendApprovalNotification } from '@/lib/teams-bot';
 import { sendNotificationEmail, generateApprovalEmailBody } from '@/lib/email';
 import { formatAbsenceType } from '@/lib/utils/format';
@@ -123,10 +123,52 @@ export async function POST(request: NextRequest) {
       startDate: new Date(validated.startDate),
       endDate: new Date(validated.endDate),
       substitute: substituteInfo,
-      // userSignature: user.signature,  // TODO: Aus Entra ID oder User Model
     });
 
     console.log('✅ Auto-reply messages generated');
+
+    // 🟦 6.6. Resolve substitute user data
+    let substituteData: any = undefined;
+    if (validated.substitute?.email) {
+      const subUser = await User.findOne({ email: validated.substitute.email });
+      let substituteUserId = subUser?.entraId || '';
+      let substituteName = validated.substitute.name || subUser?.name || '';
+
+      if (!substituteUserId) {
+        try {
+          const graphUser = await getGraphUser(validated.substitute.email);
+          if (graphUser?.id) {
+            substituteUserId = graphUser.id;
+            substituteName = substituteName || graphUser.displayName;
+          }
+        } catch (error) {
+          console.error('Failed to resolve substitute entraId from Graph:', error);
+        }
+      }
+
+      substituteData = {
+        userId: substituteUserId,
+        email: validated.substitute.email,
+        name: substituteName,
+        notified: false,
+      };
+    }
+
+    // 🟦 6.7. Prepare handover data
+    let handoverData: any = undefined;
+    if (validated.handover?.enabled && validated.handover.items) {
+      handoverData = {
+        enabled: true,
+        items: validated.handover.items.map((item: any) => ({
+          ...item,
+          status: 'open',
+        })),
+        generalNotes: validated.handover.generalNotes || undefined,
+        activityNotes: [],
+        emergencyContact: validated.handover.emergencyContact || { availability: 'unavailable' },
+        createdBy: 'employee',
+      };
+    }
 
     console.log('🟦 7. Creating absence in DB...');
     const absence = await Absence.create({
@@ -143,7 +185,13 @@ export async function POST(request: NextRequest) {
       reason: validated.reason,
       conflictWarning: false,
 
-      // ⭐ NEU: Auto-Reply Settings mit Smart Defaults
+      // Substitute
+      ...(substituteData && { substitute: substituteData }),
+
+      // Handover
+      ...(handoverData && { handover: handoverData }),
+
+      // Auto-Reply Settings
       autoReplySettings: {
         enabled: autoReplyEnabled,
         hasSubstitute,
@@ -195,7 +243,7 @@ export async function POST(request: NextRequest) {
             manager.entraId,   // ← AN: Manager (Adele)
             manager.email,
             {
-              id: absence._id.toString(), // Added for Magic Links
+              id: (absence as any)._id.toString(), // Added for Magic Links
               employeeName: absence.userName,
               type: formatAbsenceType(absence.type),
               startDate: new Date(absence.startDate).toLocaleDateString('de-DE'),

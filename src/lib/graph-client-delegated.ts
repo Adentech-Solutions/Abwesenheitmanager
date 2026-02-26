@@ -138,11 +138,19 @@ export async function sendTeamsAdaptiveCard(
   try {
     console.log('💬 Sending Teams Adaptive Card (delegated)...');
 
+    // We need to fetch 'me' to ensure we aren't sending to ourselves and causing a loop/matching all chats
+    const me = await client.api('/me').select('id').get();
+
+    if (toUserId === me.id) {
+      console.log('⚠️ Attempting to send a Teams message to self. Skipping to avoid chat filter matching all chats.');
+      return { success: true, skipped: true };
+    }
+
     // 1. Try existing chat
     try {
       const chatsResponse = await client
         .api('/me/chats')
-        .filter(`members/any(m: m/userId eq '${toUserId}')`)
+        .filter(`chatType eq 'oneOnOne' and members/any(m: m/userId eq '${toUserId}')`)
         .get();
 
       if (chatsResponse.value && chatsResponse.value.length > 0) {
@@ -158,8 +166,6 @@ export async function sendTeamsAdaptiveCard(
     }
 
     // 2. Create new chat (Reuse logic or keep it simple)
-    // We need to fetch 'me' if session id is missing
-    const me = await client.api('/me').select('id').get();
 
     const newChat = await client
       .api('/chats')

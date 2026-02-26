@@ -4,8 +4,10 @@ const SECRET = process.env.NEXTAUTH_SECRET || 'fallback-secret-do-not-use-in-pro
 
 export interface ActionTokenPayload {
     absenceId: string;
-    action: 'approve' | 'reject';
-    approverId: string;
+    action: 'approve' | 'reject' | 'acknowledge' | 'mark_done' | 'add_note' | 'return_summary';
+    approverId: string; // Legacy — kept for backwards compat
+    actorId?: string;   // Preferred — the user performing the action
+    itemId?: string;    // For mark_done action — the handover item ID
     expiresAt: number;
 }
 

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
 import User from '@/models/User';
+import { getGraphUser } from '@/lib/graph-client';
 import { verifyActionToken } from '@/lib/tokens';
-import { sendApprovalResultNotification } from '@/lib/teams-bot';
+import { sendApprovalResultNotification, sendHandoverNotification, sendHandoverTrackerCard } from '@/lib/teams-bot';
 
 export const dynamic = 'force-dynamic'; // Ensure this route is not cached
 
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
         await sendApprovalResultNotification(
             approverId,
             absence.userId,
-            action,
+            action === 'approve' ? 'approved' : 'rejected',
             {
                 type: absence.type,
                 startDate: absence.startDate.toISOString().split('T')[0],
@@ -71,6 +72,66 @@ export async function GET(request: NextRequest) {
                 reason: absence.reason
             }
         );
+
+        // 📋 Send handover notification to substitute (if handover enabled)
+        if (action === 'approve' && absence.handover?.enabled && absence.substitute?.email) {
+            try {
+                console.log('📋 Sending handover notification from Quick Approve...');
+                // Find substitute User ID (From DB, Document, or Graph)
+                let substituteEntraId = absence.substitute.userId;
+                if (!substituteEntraId) {
+                    const subUser = await User.findOne({ email: absence.substitute.email });
+                    if (subUser?.entraId) substituteEntraId = subUser.entraId;
+                    else {
+                        try {
+                            const graphUser = await getGraphUser(absence.substitute.email);
+                            if (graphUser?.id) substituteEntraId = graphUser.id;
+                        } catch (e) { }
+                    }
+                }
+
+                if (substituteEntraId) {
+                    if (substituteEntraId === approverId) {
+                        console.log('📋 Manager is substitute, auto-acknowledging handover (Quick Link)...');
+                        if (absence.handover) {
+                            absence.set('handover.status', 'acknowledged');
+                            absence.set('handover.acknowledgedAt', new Date());
+
+                            console.log('📋 Sending Tracker Card to Manager (Quick Approve)...');
+                            await sendHandoverTrackerCard(
+                                approverId,
+                                {
+                                    id: absence.id,
+                                    employeeName: absence.userName,
+                                    startDate: new Date(absence.startDate).toISOString(),
+                                    endDate: new Date(absence.endDate).toISOString(),
+                                    items: absence.handover.items || []
+                                }
+                            );
+                        }
+                    } else {
+                        await sendHandoverNotification(
+                            approverId, // manager
+                            substituteEntraId,
+                            {
+                                absenceId: absence.id,
+                                employeeName: absence.userName,
+                                startDate: new Date(absence.startDate).toLocaleDateString('de-DE'),
+                                endDate: new Date(absence.endDate).toLocaleDateString('de-DE'),
+                                totalDays: absence.totalDays,
+                            },
+                            absence.handover
+                        );
+                    }
+                }
+                absence.set('handover.notifiedAt', new Date());
+                absence.set('substitute.notified', true);
+                await absence.save();
+                console.log('✅ Handover notification sent from Quick Approve');
+            } catch (error) {
+                console.error('❌ Error sending handover notification from quick approve:', error);
+            }
+        }
 
         // Success Response
         return new NextResponse(`

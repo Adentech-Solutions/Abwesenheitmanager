@@ -1,4 +1,4 @@
-// src/app/api/approvals/[id]/approve/route.ts - WITH TYPE FIXES
+// src/app/api/approvals/[id]/approve/route.ts - WITH HANDOVER SUPPORT
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -6,8 +6,8 @@ import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
 import User from '@/models/User';
-import { createCalendarEvent, setAutomaticReplies, mapAutoReplySettings } from '@/lib/graph-client';
-import { sendApprovalResultNotification } from '@/lib/teams-bot';
+import { createCalendarEvent, setAutomaticReplies, mapAutoReplySettings, getGraphUser } from '@/lib/graph-client';
+import { sendApprovalResultNotification, sendHandoverNotification, sendHandoverTrackerCard } from '@/lib/teams-bot';
 import { formatAbsenceType } from '@/lib/utils/format';
 import { auditLog } from '@/lib/middleware/audit';
 import { requireRole } from '@/lib/rbac';
@@ -47,7 +47,7 @@ export async function POST(
       manager.email,
       'approved',
       'absence',
-      absence._id.toString(),
+      params.id,
       [{ field: 'status', oldValue: 'pending', newValue: 'approved' }],
       request
     );
@@ -74,16 +74,13 @@ export async function POST(
       console.log('✅ Calendar event created');
     } catch (error) {
       console.error('❌ Error creating calendar event:', error);
-      // Continue - calendar event is not critical
     }
 
     // Set Auto-Reply (if enabled)
     if (absence.autoReplySettings?.enabled) {
       try {
         console.log('🤖 Setting auto-reply...');
-        console.log('📝 Auto-reply settings:', absence.autoReplySettings);
 
-        // ✅ BUILD CLEAN SETTINGS OBJECT (with type safety)
         const cleanSettings = {
           enabled: absence.autoReplySettings.enabled,
           hasSubstitute: absence.autoReplySettings.hasSubstitute || false,
@@ -94,12 +91,11 @@ export async function POST(
           },
           timing: {
             activateImmediately: absence.autoReplySettings.timing?.activateImmediately || false,
-            scheduledDate: absence.autoReplySettings.timing?.scheduledDate || absence.startDate,  // ✅ Fallback to startDate
+            scheduledDate: absence.autoReplySettings.timing?.scheduledDate || absence.startDate,
             scheduledTime: absence.autoReplySettings.timing?.scheduledTime || '00:00',
           },
         };
 
-        // Use helper function to map settings to Graph API format
         const graphSettings = mapAutoReplySettings(
           cleanSettings,
           absence.startDate,
@@ -107,37 +103,19 @@ export async function POST(
           absence.userName || 'Mitarbeiter'
         );
 
-        console.log('📤 Mapped settings for Graph API:', graphSettings);
-
-        // Set automatic replies via Graph API
         await setAutomaticReplies(absence.userId, graphSettings);
-
         console.log('✅ Auto-reply set successfully');
-        console.log('📧 Recipients:', {
-          internal: cleanSettings.recipients?.internal,
-          external: cleanSettings.recipients?.external,
-        });
-
-        if (cleanSettings.hasSubstitute && cleanSettings.substituteInfo) {
-          console.log('👤 With substitute:', cleanSettings.substituteInfo.email);
-        }
-
       } catch (error: any) {
         console.error('❌ Error setting auto-reply:', error);
-        console.error('❌ Error details:', error.body || error.message);
-        // IMPORTANT: Don't fail the whole request if auto-reply fails
-        // Approval is more important than auto-reply
       }
-    } else {
-      console.log('ℹ️ Auto-reply disabled by user or not configured');
     }
 
     // Notify employee via Teams
     try {
       console.log('💬 Sending Teams notification to employee...');
       await sendApprovalResultNotification(
-        manager.entraId,  // FROM: Manager (who approved)
-        absence.userId,   // TO: Employee (who requested)
+        manager.entraId,
+        absence.userId,
         'approved',
         {
           type: formatAbsenceType(absence.type),
@@ -148,8 +126,85 @@ export async function POST(
       console.log('✅ Teams notification sent to employee');
     } catch (error: any) {
       console.error('❌ Error sending Teams notification:', error);
-      console.error('❌ Teams error details:', error.body || error.message);
-      // Continue - notification is not critical
+    }
+
+    // 📋 Send handover notification to substitute (if handover enabled)
+    if (absence.handover?.enabled && absence.substitute?.email) {
+      try {
+        // 📋 Sending handover notification to substitute
+        console.log('📋 Sending handover notification to substitute...');
+
+        // Find substitute User ID (From DB, Document, or Graph)
+        let substituteEntraId = absence.substitute.userId;
+        if (!substituteEntraId) {
+          const subUser = await User.findOne({ email: absence.substitute.email });
+          if (subUser?.entraId) substituteEntraId = subUser.entraId;
+          else {
+            try {
+              const graphUser = await getGraphUser(absence.substitute.email);
+              if (graphUser?.id) substituteEntraId = graphUser.id;
+            } catch (e) { }
+          }
+        }
+
+        if (substituteEntraId) {
+          if (substituteEntraId === manager.entraId) {
+            console.log('📋 Manager is the substitute, auto-acknowledging handover...');
+            if (absence.handover) {
+              absence.set('handover.status', 'acknowledged');
+              absence.set('handover.acknowledgedAt', new Date());
+
+              console.log('📋 Sending Tracker Card to Manager...');
+              await sendHandoverTrackerCard(
+                manager.entraId,
+                {
+                  id: params.id,
+                  employeeName: absence.userName,
+                  startDate: new Date(absence.startDate).toISOString(),
+                  endDate: new Date(absence.endDate).toISOString(),
+                  items: absence.handover.items || []
+                }
+              );
+            }
+          } else {
+            await sendHandoverNotification(
+              manager.entraId,
+              substituteEntraId,
+              {
+                absenceId: params.id,
+                employeeName: absence.userName,
+                startDate: new Date(absence.startDate).toLocaleDateString('de-DE'),
+                endDate: new Date(absence.endDate).toLocaleDateString('de-DE'),
+                totalDays: absence.totalDays,
+              },
+              absence.handover
+            );
+          }
+
+          // Update handover notifiedAt
+          absence.set('handover.notifiedAt', new Date());
+          absence.set('substitute.notified', true);
+          await absence.save();
+
+          console.log('✅ Handover processing complete (sent or auto-acknowledged)');
+
+          // Audit log
+          await auditLog(
+            manager.entraId,
+            manager.email,
+            'updated',
+            'absence',
+            params.id,
+            [{ field: 'handover.notifiedAt', oldValue: null, newValue: new Date().toISOString() }],
+            request
+          );
+        } else {
+          console.log('⚠️ Substitute user not found in DB or missing entraId');
+        }
+      } catch (error: any) {
+        console.error('❌ Error sending handover notification:', error);
+        // Non-critical — don't fail the approval
+      }
     }
 
     console.log('✅ POST /api/approvals/[id]/approve - SUCCESS');

@@ -7,6 +7,8 @@ import StatsCards from '@/components/dashboard/StatsCard';
 import VacationBalance from '@/components/dashboard/VacationBalance';
 import UpcomingAbsences from '@/components/dashboard/UpcomingAbsences';
 import TeamOverview from '@/components/dashboard/TeamCalendar';
+import MySubstitutions from '@/components/dashboard/MySubstitutions';
+import WelcomeBack from '@/components/dashboard/WelcomeBack';
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -22,6 +24,9 @@ export default function DashboardPage() {
           </p>
         </div>
 
+        {/* Welcome Back Widget (only renders if applicable) */}
+        <WelcomeBack />
+
         {/* Stats Cards */}
         <StatsCards />
 
@@ -31,7 +36,10 @@ export default function DashboardPage() {
           <VacationBalance />
 
           {/* Upcoming Absences */}
-          <UpcomingAbsences />
+          <div className="space-y-6">
+            <UpcomingAbsences />
+            <MySubstitutions />
+          </div>
         </div>
 
         {/* Team Overview */}

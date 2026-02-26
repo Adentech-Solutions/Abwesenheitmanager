@@ -85,15 +85,71 @@ const AbsenceSchema = new Schema<IAbsenceDocument>(
         type: Boolean,
         default: false,
       },
-      tasks: String,
+      acknowledgedAt: Date,
+      tasks: String, // Legacy
+    },
+    handover: {
+      enabled: { type: Boolean, default: false },
+
+      items: [{
+        id: String,
+        title: { type: String },
+        description: String,
+        links: [{
+          title: String,
+          url: String,
+        }],
+        isUrgent: { type: Boolean, default: false },
+        status: {
+          type: String,
+          enum: ['open', 'done'],
+          default: 'open',
+        },
+        completedAt: Date,
+        completedNote: String,
+      }],
+
+      generalNotes: String,
+
+      activityNotes: [{
+        id: String,
+        content: String,
+        createdAt: { type: Date, default: Date.now },
+        createdBy: String,
+        createdByName: String,
+      }],
+
+      emergencyContact: {
+        availability: {
+          type: String,
+          enum: ['unavailable', 'emergency_only', 'limited_email'],
+          default: 'unavailable',
+        },
+        phone: String,
+        note: String,
+      },
+
+      returnSummary: {
+        content: String,
+        createdAt: Date,
+        createdBy: String,
+      },
+
+      createdBy: {
+        type: String,
+        enum: ['employee', 'manager'],
+        default: 'employee',
+      },
+      notifiedAt: Date,
+      acknowledgedAt: Date,
     },
     // ⭐ UPDATED: Erweiterte Auto-Reply Settings
     autoReplySettings: {
       enabled: {
         type: Boolean,
-        default: true,  // ← DEFAULT: true (immer aktiviert)
+        default: true,
       },
-      
+
       // Vertretung
       hasSubstitute: {
         type: Boolean,
@@ -104,39 +160,39 @@ const AbsenceSchema = new Schema<IAbsenceDocument>(
         name: String,
         phone: String,
       },
-      
-      // Empfänger (DEFAULT: beide true)
+
+      // Empfänger
       recipients: {
         internal: {
           type: Boolean,
-          default: true,  // ← DEFAULT: true
+          default: true,
         },
         external: {
           type: Boolean,
-          default: true,  // ← DEFAULT: true
+          default: true,
         },
       },
-      
+
       // Zeitplanung
       timing: {
         activateImmediately: {
           type: Boolean,
           default: false,
         },
-        scheduledDate: Date,      // Startdatum der Abwesenheit
+        scheduledDate: Date,
         scheduledTime: {
           type: String,
-          default: '00:00',        // ← DEFAULT: Mitternacht
+          default: '00:00',
         },
       },
-      
-      // Generierte Nachricht (wird automatisch erstellt)
+
+      // Generierte Nachricht
       generatedMessage: {
         internal: String,
         external: String,
       },
-      
-      // Legacy-Felder (für Kompatibilität)
+
+      // Legacy-Felder
       activateAt: Date,
       deactivateAt: Date,
       templateId: String,
@@ -169,9 +225,10 @@ AbsenceSchema.index({ userId: 1, startDate: -1 });
 AbsenceSchema.index({ status: 1, startDate: 1 });
 AbsenceSchema.index({ userEmail: 1 });
 AbsenceSchema.index({ startDate: 1, endDate: 1 });
+AbsenceSchema.index({ 'substitute.email': 1 });
 
 // Methods
-AbsenceSchema.methods.approve = function(approverId: string, approverEmail: string) {
+AbsenceSchema.methods.approve = function (approverId: string, approverEmail: string) {
   this.status = 'approved';
   this.approvedBy = approverId;
   this.approvedByEmail = approverEmail;
@@ -179,7 +236,7 @@ AbsenceSchema.methods.approve = function(approverId: string, approverEmail: stri
   return this.save();
 };
 
-AbsenceSchema.methods.reject = function(approverId: string, approverEmail: string, reason: string) {
+AbsenceSchema.methods.reject = function (approverId: string, approverEmail: string, reason: string) {
   this.status = 'rejected';
   this.approvedBy = approverId;
   this.approvedByEmail = approverEmail;

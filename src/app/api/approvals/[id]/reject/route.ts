@@ -47,7 +47,7 @@ export async function POST(
       manager.email,
       'rejected',
       'absence',
-      absence._id.toString(),
+      params.id,
       [{ field: 'status', oldValue: 'pending', newValue: 'rejected' }],
       request
     );

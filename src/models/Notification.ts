@@ -3,7 +3,7 @@ import mongoose, { Schema, Model } from 'mongoose';
 export interface INotification {
   userId: string;
   userEmail: string;
-  type: 'absence_request' | 'absence_approved' | 'absence_rejected' | 'substitute_assigned' | 'vacation_reminder';
+  type: 'absence_request' | 'absence_approved' | 'absence_rejected' | 'substitute_assigned' | 'vacation_reminder' | 'handover_assigned' | 'handover_acknowledged';
   title: string;
   message: string;
   relatedAbsenceId?: string;
@@ -27,7 +27,7 @@ const NotificationSchema = new Schema<INotification>(
     },
     type: {
       type: String,
-      enum: ['absence_request', 'absence_approved', 'absence_rejected', 'substitute_assigned', 'vacation_reminder'],
+      enum: ['absence_request', 'absence_approved', 'absence_rejected', 'substitute_assigned', 'vacation_reminder', 'handover_assigned', 'handover_acknowledged'],
       required: true,
     },
     title: {
@@ -63,7 +63,7 @@ const NotificationSchema = new Schema<INotification>(
 // Indexes
 NotificationSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
 
-const Notification: Model<INotification> = 
+const Notification: Model<INotification> =
   mongoose.models.Notification || mongoose.model<INotification>('Notification', NotificationSchema);
 
 export default Notification;
