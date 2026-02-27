@@ -1,19 +1,18 @@
+// src/types/next-auth.d.ts
 import 'next-auth';
 import 'next-auth/jwt';
 
 declare module 'next-auth' {
   interface Session {
     accessToken?: string;
+    error?: 'RefreshAccessTokenError';
     user: {
       id: string;
       email: string;
       name?: string | null;
       image?: string | null;
+      role?: 'employee' | 'manager' | 'admin';
     };
-  }
-
-  interface User {
-    id: string;
   }
 }
 
@@ -22,6 +21,8 @@ declare module 'next-auth/jwt' {
     accessToken?: string;
     refreshToken?: string;
     idToken?: string;
+    accessTokenExpires?: number; // Unix ms timestamp
+    error?: 'RefreshAccessTokenError';
     id?: string;
   }
-} 
+}

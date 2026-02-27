@@ -147,7 +147,7 @@ const AbsenceSchema = new Schema<IAbsenceDocument>(
     autoReplySettings: {
       enabled: {
         type: Boolean,
-        default: true,
+        default: false,
       },
 
       // Vertretung
