@@ -21,8 +21,10 @@ declare module 'next-auth/jwt' {
     accessToken?: string;
     refreshToken?: string;
     idToken?: string;
-    accessTokenExpires?: number; // Unix ms timestamp
+    accessTokenExpires?: number;
     error?: 'RefreshAccessTokenError';
-    id?: string;
+    // ✅ Cached in JWT — kein DB-Call pro Request mehr nötig
+    role?: 'employee' | 'manager' | 'admin';
+    entraId?: string;
   }
 }

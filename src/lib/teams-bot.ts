@@ -20,9 +20,47 @@ import { generateActionToken } from '@/lib/tokens';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+// Service Principal Object ID cachen (einmalig abrufen)
+// = die "User"-Identität der App im Tenant
+let _botUserIdCache: string | null = null;
+
+async function getBotUserId(): Promise<string> {
+  if (_botUserIdCache) return _botUserIdCache;
+
+  // Option 1: Explizit in .env gesetzt (empfohlen für Prod)
+  if (process.env.AZURE_BOT_USER_ID) {
+    _botUserIdCache = process.env.AZURE_BOT_USER_ID;
+    console.log(`🤖 Bot User ID (from env): ${_botUserIdCache}`);
+    return _botUserIdCache;
+  }
+
+  // Option 2: Service Principal via Graph API abrufen
+  // Azure AD → Enterprise Applications → deine App → Object ID
+  try {
+    const sp = await graphClient
+      .api(`/servicePrincipals`)
+      .filter(`appId eq '${process.env.AZURE_AD_CLIENT_ID}'`)
+      .select('id,displayName')
+      .get();
+
+    if (sp.value?.[0]?.id) {
+      _botUserIdCache = sp.value[0].id;
+      console.log(`🤖 Bot User ID (from Graph): ${_botUserIdCache} (${sp.value[0].displayName})`);
+      return _botUserIdCache;
+    }
+  } catch (e: any) {
+    console.error('❌ Bot User ID nicht gefunden:', e.message);
+  }
+
+  throw new Error(
+    'AZURE_BOT_USER_ID nicht gesetzt und Service Principal nicht gefunden.\n' +
+    'Setze AZURE_BOT_USER_ID in .env: Azure Portal → Enterprise Applications → deine App → Object ID'
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPER: Sendet Adaptive Card via Application Permissions (Chat.ReadWrite.All)
-// Sucht oder erstellt einen 1:1 Chat zwischen Bot-User und Empfänger
+// Erstellt 1:1 Chat zwischen App Service Principal (Bot) und Empfänger
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function sendAppBotCard(toUserId: string, cardContent: any): Promise<{ success: boolean; error?: any }> {
@@ -41,9 +79,11 @@ async function sendAppBotCard(toUserId: string, cardContent: any): Promise<{ suc
   };
 
   try {
-    // Schritt 1: Existierenden 1:1 Chat suchen
-    let chatId: string | null = null;
+    const botUserId = await getBotUserId();
 
+    // Schritt 1: Existierenden Chat suchen
+    // Suche nach dem spezifischen Chat via Members
+    let chatId: string | null = null;
     try {
       const chatsRes = await graphClient
         .api('/chats')
@@ -52,7 +92,8 @@ async function sendAppBotCard(toUserId: string, cardContent: any): Promise<{ suc
         .get();
 
       const existingChat = chatsRes.value?.find((chat: any) =>
-        chat.members?.some((m: any) => m.userId === toUserId)
+        chat.members?.some((m: any) => m.userId === toUserId) &&
+        chat.members?.some((m: any) => m.userId === botUserId)
       );
 
       if (existingChat) {
@@ -63,9 +104,9 @@ async function sendAppBotCard(toUserId: string, cardContent: any): Promise<{ suc
       console.log('⚠️ Chat-Suche fehlgeschlagen, erstelle neuen Chat...');
     }
 
-    // Schritt 2: Neuen Chat erstellen falls keiner existiert
+    // Schritt 2: Neuen Chat erstellen mit BEIDEN Members (Bot + Empfänger)
     if (!chatId) {
-      console.log(`📨 Erstelle neuen 1:1 Chat mit User: ${toUserId}`);
+      console.log(`📨 Erstelle 1:1 Chat: Bot(${botUserId}) ↔ User(${toUserId})`);
 
       const newChat = await graphClient
         .api('/chats')
@@ -75,13 +116,18 @@ async function sendAppBotCard(toUserId: string, cardContent: any): Promise<{ suc
             {
               '@odata.type': '#microsoft.graph.aadUserConversationMember',
               roles: ['owner'],
+              'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${botUserId}')`,
+            },
+            {
+              '@odata.type': '#microsoft.graph.aadUserConversationMember',
+              roles: ['owner'],
               'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${toUserId}')`,
             },
           ],
         });
 
       chatId = newChat.id;
-      console.log(`✅ Neuer Chat erstellt: ${chatId}`);
+      console.log(`✅ Chat erstellt: ${chatId}`);
     }
 
     // Schritt 3: Card senden
