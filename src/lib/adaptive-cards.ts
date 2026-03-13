@@ -1,9 +1,32 @@
 // src/lib/adaptive-cards.ts
+// Redesigned: richer manager card, better visual hierarchy
 
 // ─────────────────────────────────────────────
-// 1. APPROVAL REQUEST CARD → Manager
+// HELPER
 // ─────────────────────────────────────────────
+export const formatAbsenceTypeGerman = (type: string): string => {
+    const types: Record<string, string> = {
+        vacation: '🏖️ Urlaub',
+        sick: '🤒 Krankheit',
+        training: '📚 Fortbildung',
+        parental: '👶 Elternzeit',
+    };
+    return types[type] || type;
+};
 
+const typeColor = (type: string): string => {
+    const colors: Record<string, string> = {
+        vacation: 'accent',
+        sick: 'attention',
+        training: 'good',
+        parental: 'warning',
+    };
+    return colors[type] || 'default';
+};
+
+// ─────────────────────────────────────────────
+// 1. APPROVAL REQUEST CARD → Manager (REDESIGNED)
+// ─────────────────────────────────────────────
 export const createAbsenceRequestCard = (details: {
     id?: string;
     employeeName: string;
@@ -12,72 +35,195 @@ export const createAbsenceRequestCard = (details: {
     endDate: string;
     totalDays: number;
     reason?: string;
-    approvalLink?: string;   // legacy
-    approveUrl?: string;     // magic link
-    rejectUrl?: string;      // magic link
+    approvalLink?: string;
+    approveUrl?: string;
+    rejectUrl?: string;
     dashboardUrl?: string;
     remainingDays?: number;
     handoverEnabled?: boolean;
     handoverItemCount?: number;
     handoverUrgentCount?: number;
     substituteName?: string;
+    department?: string;
+    jobTitle?: string;
 }) => {
-    const facts: { title: string; value: string }[] = [
-        { title: 'Art:', value: details.type },
-        { title: 'Zeitraum:', value: `${details.startDate} → ${details.endDate}` },
-        { title: 'Dauer:', value: `${details.totalDays} Arbeitstage` },
-    ];
-    if (details.remainingDays !== undefined) facts.push({ title: 'Resturlaub danach:', value: `${details.remainingDays} Tage` });
-    if (details.reason) facts.push({ title: 'Begründung:', value: details.reason });
-    if (details.substituteName) facts.push({ title: 'Vertretung:', value: details.substituteName });
-    if (details.handoverEnabled && details.handoverItemCount) {
-        const urgentSuffix = details.handoverUrgentCount ? ` (${details.handoverUrgentCount} dringend)` : '';
-        facts.push({ title: 'Übergabe:', value: `${details.handoverItemCount} Aufgaben${urgentSuffix}` });
-    }
+    const typeLabel = formatAbsenceTypeGerman(details.type);
+    const urgentText = details.handoverUrgentCount
+        ? ` (${details.handoverUrgentCount} dringend)`
+        : '';
 
-    const approveUrl = details.approveUrl || details.approvalLink || '';
-    const rejectUrl = details.rejectUrl || '';
-    const dashboardUrl = details.dashboardUrl || process.env.NEXT_PUBLIC_APP_URL || '';
+    const body: any[] = [
+        // ── Header Banner ──
+        {
+            type: 'Container',
+            style: 'emphasis',
+            bleed: true,
+            items: [
+                {
+                    type: 'ColumnSet',
+                    columns: [
+                        {
+                            type: 'Column',
+                            width: 'stretch',
+                            items: [
+                                {
+                                    type: 'TextBlock',
+                                    text: '📋 Neuer Urlaubsantrag',
+                                    weight: 'Bolder',
+                                    size: 'Large',
+                                    color: 'Default',
+                                },
+                                {
+                                    type: 'TextBlock',
+                                    text: `Von **${details.employeeName}**`,
+                                    spacing: 'None',
+                                    isSubtle: true,
+                                    wrap: true,
+                                },
+                            ],
+                        },
+                        {
+                            type: 'Column',
+                            width: 'auto',
+                            items: [
+                                {
+                                    type: 'TextBlock',
+                                    text: typeLabel,
+                                    weight: 'Bolder',
+                                    size: 'Medium',
+                                    horizontalAlignment: 'Right',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+
+        // ── Abwesenheitsdetails ──
+        {
+            type: 'Container',
+            spacing: 'Medium',
+            items: [
+                {
+                    type: 'TextBlock',
+                    text: 'ABWESENHEITSDETAILS',
+                    weight: 'Bolder',
+                    size: 'Small',
+                    color: 'Accent',
+                    spacing: 'None',
+                },
+                {
+                    type: 'FactSet',
+                    spacing: 'Small',
+                    facts: [
+                        { title: '📅 Zeitraum:', value: `${details.startDate} → ${details.endDate}` },
+                        { title: '⏱️ Dauer:', value: `**${details.totalDays} Arbeitstage**` },
+                        ...(details.remainingDays !== undefined
+                            ? [{ title: '🏖️ Resturlaub danach:', value: `${details.remainingDays} Tage` }]
+                            : []),
+                        ...(details.department
+                            ? [{ title: '🏢 Abteilung:', value: details.department }]
+                            : []),
+                        ...(details.jobTitle
+                            ? [{ title: '💼 Position:', value: details.jobTitle }]
+                            : []),
+                    ],
+                },
+            ],
+        },
+
+        // ── Begründung (wenn vorhanden) ──
+        ...(details.reason ? [{
+            type: 'Container',
+            style: 'emphasis',
+            spacing: 'Small',
+            items: [
+                { type: 'TextBlock', text: '💬 Begründung', weight: 'Bolder', size: 'Small' },
+                { type: 'TextBlock', text: details.reason, wrap: true, spacing: 'Small' },
+            ],
+        }] : []),
+
+        // ── Vertretung & Übergabe ──
+        ...(details.substituteName || details.handoverEnabled ? [{
+            type: 'Container',
+            spacing: 'Medium',
+            items: [
+                {
+                    type: 'TextBlock',
+                    text: 'VERTRETUNG & ÜBERGABE',
+                    weight: 'Bolder',
+                    size: 'Small',
+                    color: 'Accent',
+                    spacing: 'None',
+                },
+                {
+                    type: 'FactSet',
+                    spacing: 'Small',
+                    facts: [
+                        ...(details.substituteName
+                            ? [{ title: '👤 Vertretung:', value: details.substituteName }]
+                            : [{ title: '👤 Vertretung:', value: 'Nicht festgelegt' }]),
+                        ...(details.handoverEnabled
+                            ? [{ title: '📋 Übergabe:', value: `${details.handoverItemCount || 0} Aufgaben${urgentText}` }]
+                            : [{ title: '📋 Übergabe:', value: 'Nicht konfiguriert' }]),
+                    ],
+                },
+            ],
+        }] : []),
+
+        // ── Trennlinie ──
+        { type: 'Container', spacing: 'Medium', style: 'default', items: [{ type: 'TextBlock', text: ' ', spacing: 'None' }] },
+
+        // ── Hinweistext ──
+        {
+            type: 'TextBlock',
+            text: 'Bitte prüfen Sie den Antrag und treffen Sie eine Entscheidung:',
+            wrap: true,
+            isSubtle: true,
+            size: 'Small',
+            spacing: 'Small',
+        },
+    ];
 
     const actions: any[] = [];
-    if (approveUrl) actions.push({ type: 'Action.OpenUrl', title: '✅ Genehmigen', url: approveUrl, style: 'positive' });
-    if (rejectUrl) actions.push({ type: 'Action.OpenUrl', title: '❌ Ablehnen', url: rejectUrl, style: 'destructive' });
-    if (dashboardUrl) actions.push({ type: 'Action.OpenUrl', title: 'Im Dashboard öffnen', url: dashboardUrl });
+
+    if (details.approveUrl || details.approvalLink) {
+        actions.push({
+            type: 'Action.OpenUrl',
+            title: '✅ Genehmigen',
+            url: details.approveUrl || details.approvalLink,
+            style: 'positive',
+        });
+    }
+    if (details.rejectUrl) {
+        actions.push({
+            type: 'Action.OpenUrl',
+            title: '❌ Ablehnen',
+            url: details.rejectUrl,
+            style: 'destructive',
+        });
+    }
+    if (details.dashboardUrl) {
+        actions.push({
+            type: 'Action.OpenUrl',
+            title: '📊 Im Dashboard öffnen',
+            url: details.dashboardUrl,
+        });
+    }
 
     return {
         type: 'AdaptiveCard',
         $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
         version: '1.5',
-        body: [
-            {
-                type: 'Container',
-                style: 'emphasis',
-                bleed: true,
-                items: [
-                    {
-                        type: 'ColumnSet',
-                        columns: [
-                            { type: 'Column', width: 'auto', items: [{ type: 'TextBlock', text: '🏖️', size: 'ExtraLarge' }] },
-                            {
-                                type: 'Column', width: 'stretch', items: [
-                                    { type: 'TextBlock', text: 'Neuer Urlaubsantrag', weight: 'Bolder', size: 'Medium' },
-                                    { type: 'TextBlock', text: `Von ${details.employeeName}`, isSubtle: true, spacing: 'None' },
-                                ]
-                            },
-                        ],
-                    },
-                ],
-            },
-            { type: 'FactSet', facts, spacing: 'Medium' },
-        ],
+        body,
         actions,
     };
 };
 
 // ─────────────────────────────────────────────
-// 2. STATUS NOTIFICATION CARD → Employee
+// 2. STATUS NOTIFICATION → Employee
 // ─────────────────────────────────────────────
-
 export const createStatusNotificationCard = (details: {
     status: 'approved' | 'rejected';
     type: string;
@@ -87,7 +233,6 @@ export const createStatusNotificationCard = (details: {
     dashboardUrl?: string;
 }) => {
     const isApproved = details.status === 'approved';
-    const dashboardUrl = details.dashboardUrl || process.env.NEXT_PUBLIC_APP_URL || '';
 
     return {
         type: 'AdaptiveCard',
@@ -100,16 +245,20 @@ export const createStatusNotificationCard = (details: {
                 bleed: true,
                 items: [
                     {
-                        type: 'ColumnSet',
-                        columns: [
-                            { type: 'Column', width: 'auto', items: [{ type: 'TextBlock', text: isApproved ? '✅' : '❌', size: 'ExtraLarge' }] },
-                            {
-                                type: 'Column', width: 'stretch', items: [
-                                    { type: 'TextBlock', text: isApproved ? 'Antrag genehmigt' : 'Antrag abgelehnt', weight: 'Bolder', size: 'Medium' },
-                                    { type: 'TextBlock', text: isApproved ? 'Ihr Urlaubsantrag wurde genehmigt.' : 'Ihr Urlaubsantrag wurde leider abgelehnt.', isSubtle: true, spacing: 'None' },
-                                ]
-                            },
-                        ],
+                        type: 'TextBlock',
+                        text: isApproved ? '✅ Antrag genehmigt!' : '❌ Antrag abgelehnt',
+                        weight: 'Bolder',
+                        size: 'Large',
+                        color: 'Light',
+                    },
+                    {
+                        type: 'TextBlock',
+                        text: isApproved
+                            ? 'Ihr Urlaubsantrag wurde genehmigt.'
+                            : 'Ihr Urlaubsantrag wurde leider abgelehnt.',
+                        isSubtle: true,
+                        spacing: 'None',
+                        color: 'Light',
                     },
                 ],
             },
@@ -117,38 +266,43 @@ export const createStatusNotificationCard = (details: {
                 type: 'FactSet',
                 spacing: 'Medium',
                 facts: [
-                    { title: 'Art:', value: details.type },
+                    { title: 'Art:', value: formatAbsenceTypeGerman(details.type) },
                     { title: 'Zeitraum:', value: `${details.startDate} → ${details.endDate}` },
-                    ...(details.reason ? [{ title: isApproved ? 'Hinweis:' : 'Grund:', value: details.reason }] : []),
+                    ...(details.reason ? [{ title: 'Hinweis:', value: details.reason }] : []),
                 ],
             },
+            ...(isApproved ? [{
+                type: 'TextBlock',
+                text: '📅 Ihr Kalender wurde aktualisiert und Ihre automatische Abwesenheitsnotiz wird zum Startzeitpunkt aktiviert.',
+                wrap: true,
+                isSubtle: true,
+                size: 'Small',
+                spacing: 'Medium',
+            }] : []),
         ],
-        actions: dashboardUrl
-            ? [{ type: 'Action.OpenUrl', title: '📊 Zum Dashboard', url: dashboardUrl }]
-            : [],
+        actions: details.dashboardUrl ? [
+            { type: 'Action.OpenUrl', title: '📊 Zum Dashboard', url: details.dashboardUrl },
+        ] : [],
     };
 };
 
 // ─────────────────────────────────────────────
 // 3. HANDOVER CARD → Substitute
 // ─────────────────────────────────────────────
-
-interface HandoverCardItem {
-    id: string;
-    title: string;
-    description?: string;
-    links?: { title: string; url: string }[];
-    isUrgent: boolean;
-    priority?: 'high' | 'medium' | 'low';
-    dueDate?: string;
-}
-
 export const createHandoverCard = (details: {
     employeeName: string;
     startDate: string;
     endDate: string;
     totalDays: number;
-    items: HandoverCardItem[];
+    items: {
+        id: string;
+        title: string;
+        description?: string;
+        links?: { title: string; url: string }[];
+        isUrgent: boolean;
+        priority?: 'high' | 'medium' | 'low';
+        dueDate?: string;
+    }[];
     generalNotes?: string;
     emergencyContact?: {
         availability: 'unavailable' | 'emergency_only' | 'limited_email';
@@ -157,93 +311,147 @@ export const createHandoverCard = (details: {
     };
     acknowledgeUrl: string;
 }) => {
-    const bodyElements: any[] = [
+    const availabilityText: Record<string, string> = {
+        unavailable: '🔴 Nicht erreichbar',
+        emergency_only: '🟡 Nur im Notfall',
+        limited_email: '🟠 Eingeschränkt per E-Mail',
+    };
+
+    const urgentItems = details.items.filter(i => i.isUrgent || i.priority === 'high');
+    const normalItems = details.items.filter(i => !i.isUrgent && i.priority !== 'high');
+
+    const body: any[] = [
+        // Header
         {
             type: 'Container',
-            style: 'emphasis',
+            style: 'warning',
             bleed: true,
+            items: [
+                {
+                    type: 'TextBlock',
+                    text: `📋 Übergabe von ${details.employeeName}`,
+                    weight: 'Bolder',
+                    size: 'Large',
+                },
+                {
+                    type: 'TextBlock',
+                    text: `${details.startDate} – ${details.endDate} · ${details.totalDays} Tage`,
+                    isSubtle: true,
+                    spacing: 'None',
+                },
+            ],
+        },
+
+        // Erreichbarkeit
+        ...(details.emergencyContact ? [{
+            type: 'Container',
+            spacing: 'Medium',
             items: [
                 {
                     type: 'ColumnSet',
                     columns: [
-                        { type: 'Column', width: 'auto', items: [{ type: 'TextBlock', text: '📋', size: 'ExtraLarge' }] },
                         {
-                            type: 'Column', width: 'stretch', items: [
-                                { type: 'TextBlock', text: `Übergabe von ${details.employeeName}`, weight: 'Bolder', size: 'Medium' },
-                                { type: 'TextBlock', text: `${details.startDate} – ${details.endDate} · ${details.totalDays} Tage`, isSubtle: true, spacing: 'None' },
-                            ]
+                            type: 'Column',
+                            width: 'stretch',
+                            items: [
+                                { type: 'TextBlock', text: 'ERREICHBARKEIT', weight: 'Bolder', size: 'Small', color: 'Accent' },
+                                {
+                                    type: 'TextBlock',
+                                    text: availabilityText[details.emergencyContact.availability] || '🔴 Nicht erreichbar',
+                                    spacing: 'Small',
+                                },
+                                ...(details.emergencyContact.phone ? [{
+                                    type: 'TextBlock',
+                                    text: `📞 ${details.emergencyContact.phone}`,
+                                    size: 'Small',
+                                    spacing: 'None',
+                                }] : []),
+                                ...(details.emergencyContact.note ? [{
+                                    type: 'TextBlock',
+                                    text: details.emergencyContact.note,
+                                    size: 'Small',
+                                    isSubtle: true,
+                                    wrap: true,
+                                    spacing: 'None',
+                                }] : []),
+                            ],
                         },
                     ],
                 },
             ],
-        },
-    ];
+        }] : []),
 
-    // Erreichbarkeit
-    if (details.emergencyContact) {
-        const ec = details.emergencyContact;
-        const ecText =
-            ec.availability === 'unavailable' ? '🔕 Nicht erreichbar' :
-                ec.availability === 'emergency_only' ? `🚨 Nur Notfälle${ec.phone ? `: ${ec.phone}` : ''}` :
-                    '📧 Eingeschränkt per E-Mail';
-
-        bodyElements.push({
+        // Allgemeine Hinweise
+        ...(details.generalNotes ? [{
             type: 'Container',
-            style: ec.availability === 'unavailable' ? 'default' : 'attention',
+            style: 'emphasis',
             spacing: 'Medium',
             items: [
-                { type: 'TextBlock', text: ecText, weight: 'Bolder', wrap: true },
-                ...(ec.note ? [{ type: 'TextBlock', text: ec.note, size: 'Small', isSubtle: true, spacing: 'None' }] : []),
+                { type: 'TextBlock', text: '📝 Allgemeine Hinweise', weight: 'Bolder', size: 'Small' },
+                { type: 'TextBlock', text: details.generalNotes, wrap: true, spacing: 'Small' },
             ],
+        }] : []),
+    ];
+
+    // Dringende Aufgaben zuerst
+    if (urgentItems.length > 0) {
+        body.push({
+            type: 'TextBlock',
+            text: `🔴 DRINGENDE AUFGABEN (${urgentItems.length})`,
+            weight: 'Bolder',
+            size: 'Small',
+            color: 'Attention',
+            spacing: 'Medium',
         });
-    }
-
-    // Aufgaben — hohe Priorität zuerst
-    if (details.items.length > 0) {
-        bodyElements.push({ type: 'TextBlock', text: `Aufgaben (${details.items.length})`, weight: 'Bolder', spacing: 'Medium' });
-
-        const sorted = [...details.items].sort((a, b) => {
-            const order = { high: 0, medium: 1, low: 2 };
-            return (order[a.priority ?? (a.isUrgent ? 'high' : 'medium')] ?? 1)
-                - (order[b.priority ?? (b.isUrgent ? 'high' : 'medium')] ?? 1);
-        });
-
-        for (const item of sorted) {
-            const isHigh = item.priority === 'high' || item.isUrgent;
-            const isMed = item.priority === 'medium';
-            const icon = isHigh ? '⚡' : isMed ? '📌' : '✓';
-
-            bodyElements.push({
+        for (const item of urgentItems) {
+            body.push({
                 type: 'Container',
-                style: isHigh ? 'attention' : 'default',
+                style: 'attention',
                 spacing: 'Small',
                 items: [
-                    { type: 'TextBlock', text: `${icon} ${item.title}`, weight: 'Bolder', wrap: true },
-                    ...(item.description ? [{ type: 'TextBlock', text: item.description, size: 'Small', wrap: true, spacing: 'None' }] : []),
-                    ...(item.dueDate ? [{ type: 'TextBlock', text: `Fällig: ${item.dueDate}`, size: 'Small', isSubtle: true, spacing: 'None' }] : []),
+                    { type: 'TextBlock', text: `⚡ ${item.title}`, weight: 'Bolder', wrap: true },
+                    ...(item.description ? [{ type: 'TextBlock', text: item.description, wrap: true, size: 'Small', spacing: 'Small' }] : []),
+                    ...(item.dueDate ? [{ type: 'TextBlock', text: `📅 Fällig: ${item.dueDate}`, size: 'Small', color: 'Attention', spacing: 'None' }] : []),
                 ],
             });
         }
     }
 
-    // Allgemeine Hinweise
-    if (details.generalNotes) {
-        bodyElements.push({
-            type: 'Container',
-            style: 'emphasis',
+    // Normale Aufgaben
+    if (normalItems.length > 0) {
+        body.push({
+            type: 'TextBlock',
+            text: `📋 AUFGABEN (${normalItems.length})`,
+            weight: 'Bolder',
+            size: 'Small',
             spacing: 'Medium',
-            items: [
-                { type: 'TextBlock', text: 'Allgemeine Hinweise', weight: 'Bolder' },
-                { type: 'TextBlock', text: details.generalNotes, wrap: true, spacing: 'None' },
-            ],
         });
+        for (const item of normalItems) {
+            body.push({
+                type: 'Container',
+                spacing: 'Small',
+                items: [
+                    { type: 'TextBlock', text: `✓ ${item.title}`, weight: 'Bolder', wrap: true },
+                    ...(item.description ? [{ type: 'TextBlock', text: item.description, wrap: true, size: 'Small', spacing: 'Small', isSubtle: true }] : []),
+                ],
+            });
+        }
     }
+
+    body.push({
+        type: 'TextBlock',
+        text: 'Bitte bestätigen Sie, dass Sie die Übergabe zur Kenntnis genommen haben.',
+        wrap: true,
+        isSubtle: true,
+        size: 'Small',
+        spacing: 'Medium',
+    });
 
     return {
         type: 'AdaptiveCard',
         $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
         version: '1.5',
-        body: bodyElements,
+        body,
         actions: [
             { type: 'Action.OpenUrl', title: '✅ Zur Kenntnis genommen', url: details.acknowledgeUrl, style: 'positive' },
         ],
@@ -251,9 +459,8 @@ export const createHandoverCard = (details: {
 };
 
 // ─────────────────────────────────────────────
-// 4. HANDOVER ACKNOWLEDGED CARD → Employee
+// 4. HANDOVER ACKNOWLEDGED → Employee
 // ─────────────────────────────────────────────
-
 export const createHandoverAcknowledgedCard = (substituteName: string) => ({
     type: 'AdaptiveCard',
     $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
@@ -264,17 +471,30 @@ export const createHandoverAcknowledgedCard = (substituteName: string) => ({
             style: 'good',
             bleed: true,
             items: [
-                { type: 'TextBlock', text: `✅ ${substituteName} hat die Übergabe bestätigt`, weight: 'Bolder', size: 'Medium' },
-                { type: 'TextBlock', text: 'Ihre Vertretung hat die Übergabe zur Kenntnis genommen und ist informiert.', isSubtle: true, spacing: 'None' },
+                { type: 'TextBlock', text: '✅ Übergabe bestätigt', weight: 'Bolder', size: 'Large', color: 'Light' },
+                { type: 'TextBlock', text: `Von ${substituteName}`, isSubtle: true, spacing: 'None', color: 'Light' },
             ],
         },
+        {
+            type: 'TextBlock',
+            text: `**${substituteName}** hat Ihre Übergabe zur Kenntnis genommen und wird Ihre Aufgaben während Ihrer Abwesenheit übernehmen.`,
+            wrap: true,
+            spacing: 'Medium',
+        },
+        {
+            type: 'TextBlock',
+            text: 'Gute Erholung! 🌴',
+            wrap: true,
+            spacing: 'Small',
+            size: 'Medium',
+        },
     ],
+    actions: [],
 });
 
 // ─────────────────────────────────────────────
 // 5. HANDOVER TRACKER CARD → Substitute
 // ─────────────────────────────────────────────
-
 export const createHandoverTrackerCard = (details: {
     absenceId: string;
     employeeName: string;
@@ -283,17 +503,38 @@ export const createHandoverTrackerCard = (details: {
     items: any[];
     generateActionUrl: (itemId: string, action: 'mark_done' | 'add_note') => string;
 }) => {
+    const doneCount = details.items.filter(i => i.status === 'done').length;
+    const totalCount = details.items.length;
+    const progressText = `${doneCount}/${totalCount} erledigt`;
+
     const bodyElements: any[] = [
         {
             type: 'Container',
             style: 'emphasis',
             bleed: true,
             items: [
-                { type: 'TextBlock', text: `📊 Übergabe Tracker: ${details.employeeName}`, weight: 'Bolder', size: 'Medium' },
-                { type: 'TextBlock', text: `Zeitraum: ${details.startDate} – ${details.endDate}`, isSubtle: true, spacing: 'None' },
+                {
+                    type: 'ColumnSet',
+                    columns: [
+                        {
+                            type: 'Column',
+                            width: 'stretch',
+                            items: [
+                                { type: 'TextBlock', text: `📊 Übergabe: ${details.employeeName}`, weight: 'Bolder', size: 'Medium' },
+                                { type: 'TextBlock', text: `${details.startDate} – ${details.endDate}`, isSubtle: true, spacing: 'None' },
+                            ],
+                        },
+                        {
+                            type: 'Column',
+                            width: 'auto',
+                            items: [
+                                { type: 'TextBlock', text: progressText, weight: 'Bolder', horizontalAlignment: 'Right', color: doneCount === totalCount ? 'Good' : 'Default' },
+                            ],
+                        },
+                    ],
+                },
             ],
         },
-        { type: 'TextBlock', text: 'Ihre Übergabe-Vorgänge in der Übersicht:', spacing: 'Medium', wrap: true },
     ];
 
     for (const item of details.items) {
@@ -304,15 +545,16 @@ export const createHandoverTrackerCard = (details: {
         bodyElements.push({
             type: 'Container',
             spacing: 'Medium',
-            style: isDone ? 'good' : 'default',
+            style: isDone ? 'good' : isUrgent ? 'attention' : 'default',
             items: [
                 { type: 'TextBlock', weight: 'Bolder', text: `${icon} ${item.title}`, wrap: true },
                 ...(item.description ? [{ type: 'TextBlock', text: item.description, wrap: true, size: 'Small', spacing: 'Small', isSubtle: isDone }] : []),
+                ...(item.dueDate && !isDone ? [{ type: 'TextBlock', text: `📅 Fällig: ${item.dueDate}`, size: 'Small', color: 'Attention', spacing: 'None' }] : []),
                 {
                     type: 'ActionSet',
                     actions: isDone ? [] : [
                         { type: 'Action.OpenUrl', title: '✅ Erledigt', url: details.generateActionUrl(item.id, 'mark_done') },
-                        { type: 'Action.OpenUrl', title: '💬 Notiz', url: details.generateActionUrl(item.id, 'add_note') },
+                        { type: 'Action.OpenUrl', title: '💬 Notiz hinzufügen', url: details.generateActionUrl(item.id, 'add_note') },
                     ],
                 },
             ],
@@ -330,7 +572,6 @@ export const createHandoverTrackerCard = (details: {
 // ─────────────────────────────────────────────
 // 6. RETURN PROMPT CARD → Substitute
 // ─────────────────────────────────────────────
-
 export const createReturnPromptCard = (details: {
     absenceId: string;
     employeeName: string;
@@ -352,9 +593,16 @@ export const createReturnPromptCard = (details: {
         },
         {
             type: 'TextBlock',
-            text: `${details.employeeName} kehrt bald zurück. Bitte schreiben Sie eine kurze Zusammenfassung der Übergabezeit, damit der Wiedereinstieg reibungslos klappt.`,
+            text: `**${details.employeeName}** kehrt morgen zurück. Bitte schreiben Sie eine kurze Zusammenfassung der Übergabezeit — was ist passiert, was ist noch offen?`,
             wrap: true,
             spacing: 'Medium',
+        },
+        {
+            type: 'TextBlock',
+            text: 'Das hilft beim reibungslosen Wiedereinstieg.',
+            wrap: true,
+            isSubtle: true,
+            size: 'Small',
         },
     ],
     actions: [
@@ -365,7 +613,6 @@ export const createReturnPromptCard = (details: {
 // ─────────────────────────────────────────────
 // 7. WELCOME BACK CARD → Employee
 // ─────────────────────────────────────────────
-
 export const createWelcomeBackCard = (details: {
     employeeName: string;
     substituteName: string;
@@ -381,11 +628,16 @@ export const createWelcomeBackCard = (details: {
             style: 'good',
             bleed: true,
             items: [
-                { type: 'TextBlock', text: `🎉 Willkommen zurück, ${details.employeeName}!`, weight: 'Bolder', size: 'Medium' },
-                { type: 'TextBlock', text: `Von ${details.substituteName}`, isSubtle: true, spacing: 'None' },
+                { type: 'TextBlock', text: `🎉 Willkommen zurück, ${details.employeeName}!`, weight: 'Bolder', size: 'Large', color: 'Light' },
+                { type: 'TextBlock', text: `Zusammenfassung von ${details.substituteName}`, isSubtle: true, spacing: 'None', color: 'Light' },
             ],
         },
-        { type: 'TextBlock', text: 'Ihre Vertretung hat folgende Zusammenfassung hinterlassen:', wrap: true, spacing: 'Medium' },
+        {
+            type: 'TextBlock',
+            text: 'Ihre Vertretung hat folgende Zusammenfassung hinterlassen:',
+            wrap: true,
+            spacing: 'Medium',
+        },
         {
             type: 'Container',
             style: 'emphasis',
@@ -397,14 +649,3 @@ export const createWelcomeBackCard = (details: {
         { type: 'Action.OpenUrl', title: '📊 Zum Dashboard', url: details.openDashboardUrl },
     ],
 });
-
-// ─────────────────────────────────────────────
-// HELPER
-// ─────────────────────────────────────────────
-
-export const formatAbsenceTypeGerman = (type: string): string => {
-    const types: Record<string, string> = {
-        vacation: 'Urlaub', sick: 'Krankheit', training: 'Fortbildung', parental: 'Elternzeit',
-    };
-    return types[type] || type;
-};

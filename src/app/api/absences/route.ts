@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     console.log('🟦 6.5. Preparing auto-reply settings...');
 
     // Default Werte aus Body oder Smart Defaults
-    const autoReplyEnabled = validated.autoReplySettings?.enabled !== true;  // Default: true
+    const autoReplyEnabled = validated.autoReplySettings?.enabled == true;  // Default: true
     const hasSubstitute = validated.autoReplySettings?.hasSubstitute || false;
     const substituteInfo = validated.autoReplySettings?.substituteInfo;
     const recipients = {

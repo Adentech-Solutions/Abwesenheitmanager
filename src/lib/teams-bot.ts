@@ -1,12 +1,10 @@
 // src/lib/teams-bot.ts
 //
-// Absender-Logik:
-// Alle Nachrichten via App (Application Permissions, Chat.ReadWrite.All)
-// Card-Inhalt macht den Kontext klar: "Übergabe von Salem Hassan" etc.
+// FIXED: AclCheckFailed → Chat-Erstellung via Delegated Permissions (bevorzugt)
+// Fallback: Application Permissions (Bot → User)
 //
-// Kein TeamsAppInstallation nötig — wir nutzen /chats direkt.
-
 import graphClient from './graph-client';
+import { getDelegatedGraphClient } from './graph-client-delegated';
 import {
   createAbsenceRequestCard,
   createStatusNotificationCard,
@@ -20,131 +18,148 @@ import { generateActionToken } from '@/lib/tokens';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-// Service Principal Object ID cachen (einmalig abrufen)
-// = die "User"-Identität der App im Tenant
 let _botUserIdCache: string | null = null;
 
 async function getBotUserId(): Promise<string> {
   if (_botUserIdCache) return _botUserIdCache;
-
-  // Option 1: Explizit in .env gesetzt (empfohlen für Prod)
   if (process.env.AZURE_BOT_USER_ID) {
     _botUserIdCache = process.env.AZURE_BOT_USER_ID;
-    console.log(`🤖 Bot User ID (from env): ${_botUserIdCache}`);
     return _botUserIdCache;
   }
-
-  // Option 2: Service Principal via Graph API abrufen
-  // Azure AD → Enterprise Applications → deine App → Object ID
   try {
     const sp = await graphClient
       .api(`/servicePrincipals`)
       .filter(`appId eq '${process.env.AZURE_AD_CLIENT_ID}'`)
       .select('id,displayName')
       .get();
-
     if (sp.value?.[0]?.id) {
       _botUserIdCache = sp.value[0].id;
-      console.log(`🤖 Bot User ID (from Graph): ${_botUserIdCache} (${sp.value[0].displayName})`);
+      console.log(`🤖 Bot User ID: ${_botUserIdCache} (${sp.value[0].displayName})`);
       return _botUserIdCache;
     }
   } catch (e: any) {
     console.error('❌ Bot User ID nicht gefunden:', e.message);
   }
-
-  throw new Error(
-    'AZURE_BOT_USER_ID nicht gesetzt und Service Principal nicht gefunden.\n' +
-    'Setze AZURE_BOT_USER_ID in .env: Azure Portal → Enterprise Applications → deine App → Object ID'
-  );
+  throw new Error('AZURE_BOT_USER_ID nicht gesetzt');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPER: Sendet Adaptive Card via Application Permissions (Chat.ReadWrite.All)
-// Erstellt 1:1 Chat zwischen App Service Principal (Bot) und Empfänger
+// CORE HELPER: Adaptive Card senden
+// Strategie 1: Delegated (im Namen des eingeloggten Users) → kein AclCheckFailed
+// Strategie 2: Application Permissions (Fallback)
 // ─────────────────────────────────────────────────────────────────────────────
-
-async function sendAppBotCard(toUserId: string, cardContent: any): Promise<{ success: boolean; error?: any }> {
+async function sendAppBotCard(
+  toUserId: string,
+  cardContent: any
+): Promise<{ success: boolean; error?: any }> {
   const payload = {
-    body: {
-      contentType: 'html',
-      content: '<attachment id="card"></attachment>',
-    },
-    attachments: [
-      {
-        id: 'card',
-        contentType: 'application/vnd.microsoft.card.adaptive',
-        content: JSON.stringify(cardContent),
-      },
-    ],
+    body: { contentType: 'html', content: '<attachment id="card"></attachment>' },
+    attachments: [{
+      id: 'card',
+      contentType: 'application/vnd.microsoft.card.adaptive',
+      content: JSON.stringify(cardContent),
+    }],
   };
 
+  // ✅ STRATEGIE 1: Delegated Permissions (bevorzugt)
+  try {
+    const client = await getDelegatedGraphClient();
+    const me = await client.api('/me').select('id').get();
+
+    if (toUserId === me.id) {
+      console.log('⚠️ Skipping self-message');
+      return { success: true };
+    }
+
+    let chatId: string;
+    try {
+      const chat = await client.api('/chats').post({
+        chatType: 'oneOnOne',
+        members: [
+          {
+            '@odata.type': '#microsoft.graph.aadUserConversationMember',
+            roles: ['owner'],
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${me.id}')`,
+          },
+          {
+            '@odata.type': '#microsoft.graph.aadUserConversationMember',
+            roles: ['owner'],
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${toUserId}')`,
+          },
+        ],
+      });
+      chatId = chat.id;
+    } catch (err: any) {
+      if (err.statusCode === 409 && err.body) {
+        const body = typeof err.body === 'string' ? JSON.parse(err.body) : err.body;
+        const existingId = body?.error?.innerError?.existingChatId || body?.innerError?.existingChatId;
+        if (existingId) {
+          chatId = existingId;
+          console.log('✅ Bestehender Chat verwendet:', chatId);
+        } else throw err;
+      } else throw err;
+    }
+
+    await client.api(`/chats/${chatId}/messages`).post(payload);
+    console.log(`✅ Card gesendet (delegated) an: ${toUserId}`);
+    return { success: true };
+
+  } catch (delegatedError: any) {
+    console.warn('⚠️ Delegated fehlgeschlagen, versuche Application Permissions...', delegatedError.message);
+  }
+
+  // ✅ STRATEGIE 2: Application Permissions (Fallback)
   try {
     const botUserId = await getBotUserId();
-
-    // Schritt 1: Existierenden Chat suchen
-    // Suche nach dem spezifischen Chat via Members
     let chatId: string | null = null;
+
     try {
       const chatsRes = await graphClient
         .api('/chats')
         .filter(`chatType eq 'oneOnOne'`)
         .expand('members')
         .get();
-
       const existingChat = chatsRes.value?.find((chat: any) =>
         chat.members?.some((m: any) => m.userId === toUserId) &&
         chat.members?.some((m: any) => m.userId === botUserId)
       );
-
-      if (existingChat) {
-        chatId = existingChat.id;
-        console.log(`✅ Bestehender Chat gefunden: ${chatId}`);
-      }
-    } catch (e) {
-      console.log('⚠️ Chat-Suche fehlgeschlagen, erstelle neuen Chat...');
+      if (existingChat) chatId = existingChat.id;
+    } catch {
+      console.log('⚠️ Chat-Suche fehlgeschlagen...');
     }
 
-    // Schritt 2: Neuen Chat erstellen mit BEIDEN Members (Bot + Empfänger)
     if (!chatId) {
-      console.log(`📨 Erstelle 1:1 Chat: Bot(${botUserId}) ↔ User(${toUserId})`);
-
-      const newChat = await graphClient
-        .api('/chats')
-        .post({
-          chatType: 'oneOnOne',
-          members: [
-            {
-              '@odata.type': '#microsoft.graph.aadUserConversationMember',
-              roles: ['owner'],
-              'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${botUserId}')`,
-            },
-            {
-              '@odata.type': '#microsoft.graph.aadUserConversationMember',
-              roles: ['owner'],
-              'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${toUserId}')`,
-            },
-          ],
-        });
-
+      const newChat = await graphClient.api('/chats').post({
+        chatType: 'oneOnOne',
+        members: [
+          {
+            '@odata.type': '#microsoft.graph.aadUserConversationMember',
+            roles: ['owner'],
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${botUserId}')`,
+          },
+          {
+            '@odata.type': '#microsoft.graph.aadUserConversationMember',
+            roles: ['owner'],
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${toUserId}')`,
+          },
+        ],
+      });
       chatId = newChat.id;
-      console.log(`✅ Chat erstellt: ${chatId}`);
     }
 
-    // Schritt 3: Card senden
     await graphClient.api(`/chats/${chatId}/messages`).post(payload);
-    console.log(`✅ Card gesendet an: ${toUserId}`);
+    console.log(`✅ Card gesendet (application) an: ${toUserId}`);
     return { success: true };
 
-  } catch (error: any) {
-    console.error(`❌ Card senden fehlgeschlagen für ${toUserId}:`, error.message);
-    return { success: false, error };
+  } catch (appError: any) {
+    console.error(`❌ Card senden fehlgeschlagen für ${toUserId}:`, appError.message);
+    return { success: false, error: appError };
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. APPROVAL NOTIFICATION → Manager (Adele)
+// 1. APPROVAL NOTIFICATION → Manager
 // ─────────────────────────────────────────────────────────────────────────────
-
 export async function sendApprovalNotification(
   fromUserId: string,
   managerId: string,
@@ -179,34 +194,25 @@ export async function sendApprovalNotification(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. APPROVAL RESULT → Employee (Salem)
+// 2. APPROVAL RESULT → Employee
 // ─────────────────────────────────────────────────────────────────────────────
-
 export async function sendApprovalResultNotification(
   fromUserId: string,
   toUserId: string,
   status: 'approved' | 'rejected',
-  absenceDetails: {
-    type: string;
-    startDate: string;
-    endDate: string;
-    reason?: string;
-  }
+  absenceDetails: { type: string; startDate: string; endDate: string; reason?: string }
 ) {
   const card = createStatusNotificationCard({
     status,
     ...absenceDetails,
     dashboardUrl: `${APP_URL}/dashboard`,
   });
-
   return sendAppBotCard(toUserId, card);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. HANDOVER NOTIFICATION → Substitute (Alex)
-//    Card zeigt: "Übergabe von Salem Hassan"
+// 3. HANDOVER NOTIFICATION → Substitute
 // ─────────────────────────────────────────────────────────────────────────────
-
 export async function sendHandoverNotification(
   employeeUserId: string,
   substituteUserId: string,
@@ -241,7 +247,6 @@ export async function sendHandoverNotification(
     approverId: substituteUserId,
     actorId: substituteUserId,
   });
-  const acknowledgeUrl = `${APP_URL}/api/handover/${absenceDetails.absenceId}/acknowledge?token=${acknowledgeToken}`;
 
   const card = createHandoverCard({
     employeeName: absenceDetails.employeeName,
@@ -251,16 +256,15 @@ export async function sendHandoverNotification(
     items: handoverDetails.items,
     generalNotes: handoverDetails.generalNotes,
     emergencyContact: handoverDetails.emergencyContact,
-    acknowledgeUrl,
+    acknowledgeUrl: `${APP_URL}/api/handover/${absenceDetails.absenceId}/acknowledge?token=${acknowledgeToken}`,
   });
 
   return sendAppBotCard(substituteUserId, card);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. HANDOVER ACKNOWLEDGED → Employee (Salem)
+// 4. HANDOVER ACKNOWLEDGED → Employee
 // ─────────────────────────────────────────────────────────────────────────────
-
 export async function sendHandoverAcknowledged(
   fromUserId: string,
   employeeUserId: string,
@@ -271,18 +275,11 @@ export async function sendHandoverAcknowledged(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. TRACKER CARD → Substitute (Alex)
+// 5. TRACKER CARD → Substitute
 // ─────────────────────────────────────────────────────────────────────────────
-
 export async function sendHandoverTrackerCard(
   substituteUserId: string,
-  absenceDetails: {
-    id: string;
-    employeeName: string;
-    startDate: string;
-    endDate: string;
-    items: any[];
-  }
+  absenceDetails: { id: string; employeeName: string; startDate: string; endDate: string; items: any[] }
 ) {
   const generateActionUrl = (itemId: string, action: 'mark_done' | 'add_note') => {
     const token = generateActionToken({
@@ -311,16 +308,11 @@ export async function sendHandoverTrackerCard(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. RETURN PROMPT CARD → Substitute (Alex)
+// 6. RETURN PROMPT CARD → Substitute
 // ─────────────────────────────────────────────────────────────────────────────
-
 export async function sendReturnPromptCard(
   substituteUserId: string,
-  absenceDetails: {
-    id: string;
-    employeeName: string;
-    endDate: string;
-  }
+  absenceDetails: { id: string; employeeName: string; endDate: string }
 ) {
   const token = generateActionToken({
     absenceId: absenceDetails.id,
@@ -333,24 +325,19 @@ export async function sendReturnPromptCard(
     absenceId: absenceDetails.id,
     employeeName: absenceDetails.employeeName,
     endDate: absenceDetails.endDate,
-    generateActionUrl: () => `${APP_URL}/api/handover/${absenceDetails.id}/return-summary?token=${token}`,
+    generateActionUrl: () =>
+      `${APP_URL}/api/handover/${absenceDetails.id}/return-summary?token=${token}`,
   });
 
   return sendAppBotCard(substituteUserId, card);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 7. WELCOME BACK CARD → Employee (Salem)
-//    Card zeigt: "Von Alex Wilber"
+// 7. WELCOME BACK CARD → Employee
 // ─────────────────────────────────────────────────────────────────────────────
-
 export async function sendWelcomeBackCard(
   employeeUserId: string,
-  details: {
-    employeeName: string;
-    substituteName: string;
-    summary: string;
-  }
+  details: { employeeName: string; substituteName: string; summary: string }
 ) {
   const card = createWelcomeBackCard({
     employeeName: details.employeeName,
