@@ -232,7 +232,7 @@ export default function UserManagementPage() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                 <Button
-                                                    variant="ghost"
+                                                    variant="secondary"
                                                     size="sm"
                                                     onClick={() => openEditModal(user)}
                                                     className="text-blue-600 hover:text-blue-900 hover:bg-blue-50"

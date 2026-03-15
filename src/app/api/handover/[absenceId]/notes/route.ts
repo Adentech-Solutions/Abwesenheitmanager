@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRole } from '@/lib/rbac';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
 
@@ -11,10 +10,7 @@ export async function POST(
     { params }: { params: { absenceId: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.id) {
-            return new NextResponse('Unauthorized', { status: 401 });
-        }
+        const { dbUser } = await requireRole(['employee', 'manager', 'admin']);
 
         await connectDB();
         const absence = await Absence.findById(params.absenceId);
@@ -23,9 +19,8 @@ export async function POST(
         }
 
         // Only substitute or admin can add notes
-        const isSubstitute = absence.substitute?.userId === session.user.id;
-        const userRole = (session.user as any).role;
-        const isAdmin = userRole === 'admin' || userRole === 'manager';
+        const isSubstitute = absence.substitute?.userId === dbUser.entraId;
+        const isAdmin = dbUser.role === 'admin' || dbUser.role === 'manager';
         if (!isSubstitute && !isAdmin) {
             return new NextResponse('Forbidden: Only the substitute can add notes', { status: 403 });
         }
@@ -39,8 +34,8 @@ export async function POST(
             id: crypto.randomUUID(),
             content: body.content.trim(),
             createdAt: new Date(),
-            createdBy: session.user.id,
-            createdByName: session.user.name || 'Unbekannt',
+            createdBy: dbUser.entraId,
+            createdByName: dbUser.name || 'Unbekannt',
         };
 
         if (!absence.handover.activityNotes) {

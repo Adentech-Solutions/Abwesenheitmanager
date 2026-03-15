@@ -54,6 +54,23 @@ const UserSchema = new Schema<IUserDocument>(
       type: String,
       lowercase: true,
     },
+    departmentId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Department',
+      index: true,
+    },
+    personioId: {
+      type: Number,
+      index: { sparse: true },
+    },
+    entraGroups: [
+      {
+        type: String,
+      },
+    ],
+    lastSyncedAt: {
+      type: Date,
+    },
     role: {
       type: String,
       enum: ['employee', 'manager', 'admin'],
@@ -75,6 +92,11 @@ const UserSchema = new Schema<IUserDocument>(
       carryOver: {
         type: Number,
         default: 0,
+      },
+      source: {
+        type: String,
+        enum: ['local', 'personio'],
+        default: 'local',
       },
     },
     startDate: {

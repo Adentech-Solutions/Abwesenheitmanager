@@ -14,8 +14,6 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    console.log('❌ POST /api/approvals/[id]/reject - START');
-
     // 🔒 Security: Require Manager or Admin role
     const { user: sessionUser, dbUser: manager } = await requireRole(['manager', 'admin']);
 
@@ -23,8 +21,6 @@ export async function POST(
 
     const body = await request.json();
     const { reason } = body;
-
-    console.log('❌ Manager:', manager.email);
 
     const absence = await Absence.findById(params.id);
     if (!absence) {
@@ -35,13 +31,18 @@ export async function POST(
       return NextResponse.json({ error: 'Absence already processed' }, { status: 400 });
     }
 
-    console.log('❌ Rejecting absence for:', absence.userEmail);
+    // 🔒 Security: Managers can only reject their own direct reports' requests
+    if (manager.role === 'manager') {
+      const absenceOwner = await User.findOne({ email: absence.userEmail });
+      if (absenceOwner?.managerId !== manager.entraId) {
+        return NextResponse.json({ error: 'Forbidden: Not the manager of this employee' }, { status: 403 });
+      }
+    }
 
     // Reject absence
     await absence.reject(manager.entraId, manager.email, reason || 'Keine Begründung angegeben');
-    console.log('❌ Absence rejected in DB');
 
-    // 📝 Audit Log
+    // Audit Log
     await auditLog(
       manager.entraId,
       manager.email,
@@ -54,10 +55,9 @@ export async function POST(
 
     // Notify employee via Teams
     try {
-      console.log('💬 Sending Teams notification to employee...');
       await sendApprovalResultNotification(
-        manager.entraId,  // ← VON: Manager (der abgelehnt hat)
-        absence.userId,   // ← AN: Employee (der den Antrag gestellt hat)
+        manager.entraId,
+        absence.userId,
         'rejected',
         {
           type: formatAbsenceType(absence.type),
@@ -66,16 +66,13 @@ export async function POST(
           reason: reason || 'Keine Begründung angegeben',
         }
       );
-      console.log('✅ Teams notification sent to employee');
     } catch (error) {
-      console.error('❌ Error sending notification:', error);
+      console.error('Error sending Teams notification to employee:', error);
     }
-
-    console.log('❌ POST /api/approvals/[id]/reject - SUCCESS');
 
     return NextResponse.json({ absence, message: 'Absence rejected' });
   } catch (error: any) {
-    console.error('❌ Error rejecting absence:', error);
+    console.error('Error rejecting absence:', error);
     if (error.message === 'Unauthorized' || error.message.startsWith('Forbidden')) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }

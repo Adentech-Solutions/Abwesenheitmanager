@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRole } from '@/lib/rbac';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
 
@@ -8,10 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.id) {
-            return new NextResponse('Unauthorized', { status: 401 });
-        }
+        const { dbUser } = await requireRole(['employee', 'manager', 'admin']);
 
         await connectDB();
 
@@ -19,7 +15,7 @@ export async function GET() {
 
         // Find absences where the current user is the substitute
         const substitutions = await Absence.find({
-            'substitute.userId': session.user.id,
+            'substitute.userId': dbUser.entraId,
             'handover.enabled': true,
         }).sort({ startDate: 1 }).lean();
 

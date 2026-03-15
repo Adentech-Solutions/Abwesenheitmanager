@@ -456,3 +456,57 @@ export async function sendTeamsMessage(
     throw error;
   }
 }
+
+// 🆕 HELPER: Get Entra Groups (supports pagination)
+export async function getEntraGroups(filter?: string) {
+  try {
+    let request = graphClient
+      .api('/groups')
+      .select('id,displayName,description,mail,groupTypes');
+
+    if (filter) {
+      request = request.filter(filter);
+    }
+
+    let response = await request.get();
+    let groups: any[] = response.value || [];
+
+    // Handle pagination
+    while (response['@odata.nextLink']) {
+      response = await graphClient.api(response['@odata.nextLink']).get();
+      if (response.value) {
+        groups = groups.concat(response.value);
+      }
+    }
+
+    return groups;
+  } catch (error) {
+    console.error('Error fetching Entra groups:', error);
+    throw error;
+  }
+}
+
+// 🆕 HELPER: Get Members of an Entra Group (supports pagination)
+export async function getGroupMembers(groupId: string) {
+  try {
+    let response = await graphClient
+      .api(`/groups/${groupId}/members`)
+      .select('id,displayName,mail,department,jobTitle')
+      .get();
+      
+    let members: any[] = response.value || [];
+
+    // Handle pagination
+    while (response['@odata.nextLink']) {
+      response = await graphClient.api(response['@odata.nextLink']).get();
+      if (response.value) {
+        members = members.concat(response.value);
+      }
+    }
+
+    return members;
+  } catch (error) {
+    console.error(`Error fetching members for group ${groupId}:`, error);
+    throw error;
+  }
+}

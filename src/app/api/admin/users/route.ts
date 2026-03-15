@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { requireRole } from '@/lib/rbac';
-import { hash } from 'bcryptjs'; // Assuming bcryptjs is used, though simple pass might be used for dev. roadmap says "Password-free (leveraging Azure AD)". So maybe no password handling needed?
 // Actually if using Azure AD, we probably don't create users with passwords here. 
 // But the roadmap says "Create /api/admin/users endpoint (GET, PUT, DELETE)".
 // I'll stick to non-password fields for now.

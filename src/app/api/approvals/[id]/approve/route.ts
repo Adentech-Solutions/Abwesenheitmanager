@@ -17,14 +17,10 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    console.log('✅ POST /api/approvals/[id]/approve - START');
-
     // 🔒 Security: Require Manager or Admin role
     const { user: sessionUser, dbUser: manager } = await requireRole(['manager', 'admin']);
 
     await connectDB();
-
-    console.log('✅ Manager:', manager.email);
 
     const absence = await Absence.findById(params.id);
     if (!absence) {
@@ -35,13 +31,18 @@ export async function POST(
       return NextResponse.json({ error: 'Absence already processed' }, { status: 400 });
     }
 
-    console.log('✅ Processing approval for:', absence.userEmail);
+    // 🔒 Security: Managers can only approve their own direct reports' requests
+    if (manager.role === 'manager') {
+      const absenceOwner = await User.findOne({ email: absence.userEmail });
+      if (absenceOwner?.managerId !== manager.entraId) {
+        return NextResponse.json({ error: 'Forbidden: Not the manager of this employee' }, { status: 403 });
+      }
+    }
 
     // Approve absence
     await absence.approve(manager.entraId, manager.email);
-    console.log('✅ Absence approved in DB');
 
-    // 📝 Audit Log
+    // Audit Log
     await auditLog(
       manager.entraId,
       manager.email,
@@ -57,13 +58,11 @@ export async function POST(
       const user = await User.findOne({ email: absence.userEmail });
       if (user) {
         await user.updateVacationBalance(absence.totalDays);
-        console.log('✅ Vacation balance updated');
       }
     }
 
     // Create calendar event
     try {
-      console.log('📅 Creating calendar event...');
       await createCalendarEvent(absence.userId, {
         subject: `${formatAbsenceType(absence.type)} - ${absence.userName}`,
         body: absence.reason || '',
@@ -71,16 +70,13 @@ export async function POST(
         endDateTime: new Date(absence.endDate).toISOString(),
         isAllDay: !absence.isHalfDay,
       });
-      console.log('✅ Calendar event created');
     } catch (error) {
-      console.error('❌ Error creating calendar event:', error);
+      console.error('Error creating calendar event:', error);
     }
 
     // Set Auto-Reply (if enabled)
     if (absence.autoReplySettings?.enabled) {
       try {
-        console.log('🤖 Setting auto-reply...');
-
         const cleanSettings = {
           enabled: absence.autoReplySettings.enabled,
           hasSubstitute: absence.autoReplySettings.hasSubstitute || false,
@@ -104,15 +100,13 @@ export async function POST(
         );
 
         await setAutomaticReplies(absence.userId, graphSettings);
-        console.log('✅ Auto-reply set successfully');
       } catch (error: any) {
-        console.error('❌ Error setting auto-reply:', error);
+        console.error('Error setting auto-reply:', error);
       }
     }
 
     // Notify employee via Teams
     try {
-      console.log('💬 Sending Teams notification to employee...');
       await sendApprovalResultNotification(
         manager.entraId,
         absence.userId,
@@ -123,18 +117,14 @@ export async function POST(
           endDate: new Date(absence.endDate).toLocaleDateString('de-DE'),
         }
       );
-      console.log('✅ Teams notification sent to employee');
     } catch (error: any) {
-      console.error('❌ Error sending Teams notification:', error);
+      console.error('Error sending Teams notification to employee:', error);
     }
 
-    // 📋 Send handover notification to substitute (if handover enabled)
+    // Send handover notification to substitute (if handover enabled)
     if (absence.handover?.enabled && absence.substitute?.email) {
       try {
-        // 📋 Sending handover notification to substitute
-        console.log('📋 Sending handover notification to substitute...');
-
-        // Find substitute User ID (From DB, Document, or Graph)
+        // Resolve substitute Entra ID
         let substituteEntraId = absence.substitute.userId;
         if (!substituteEntraId) {
           const subUser = await User.findOne({ email: absence.substitute.email });
@@ -149,12 +139,11 @@ export async function POST(
 
         if (substituteEntraId) {
           if (substituteEntraId === manager.entraId) {
-            console.log('📋 Manager is the substitute, auto-acknowledging handover...');
+            // Manager is the substitute — auto-acknowledge
             if (absence.handover) {
               absence.set('handover.status', 'acknowledged');
               absence.set('handover.acknowledgedAt', new Date());
 
-              console.log('📋 Sending Tracker Card to Manager...');
               await sendHandoverTrackerCard(
                 manager.entraId,
                 {
@@ -181,14 +170,10 @@ export async function POST(
             );
           }
 
-          // Update handover notifiedAt
           absence.set('handover.notifiedAt', new Date());
           absence.set('substitute.notified', true);
           await absence.save();
 
-          console.log('✅ Handover processing complete (sent or auto-acknowledged)');
-
-          // Audit log
           await auditLog(
             manager.entraId,
             manager.email,
@@ -198,16 +183,12 @@ export async function POST(
             [{ field: 'handover.notifiedAt', oldValue: null, newValue: new Date().toISOString() }],
             request
           );
-        } else {
-          console.log('⚠️ Substitute user not found in DB or missing entraId');
         }
       } catch (error: any) {
-        console.error('❌ Error sending handover notification:', error);
+        console.error('Error sending handover notification:', error);
         // Non-critical — don't fail the approval
       }
     }
-
-    console.log('✅ POST /api/approvals/[id]/approve - SUCCESS');
 
     return NextResponse.json({
       absence,
@@ -215,7 +196,7 @@ export async function POST(
     });
 
   } catch (error: any) {
-    console.error('❌ Error approving absence:', error);
+    console.error('Error approving absence:', error);
     if (error.message === 'Unauthorized' || error.message.startsWith('Forbidden')) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }

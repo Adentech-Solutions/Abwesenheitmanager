@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRole } from '@/lib/rbac';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
 
@@ -11,10 +10,7 @@ export async function GET(
     { params }: { params: { absenceId: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.id) {
-            return new NextResponse('Unauthorized', { status: 401 });
-        }
+        const { dbUser } = await requireRole(['employee', 'manager', 'admin']);
 
         await connectDB();
         const absence = await Absence.findById(params.absenceId).lean();
@@ -24,11 +20,9 @@ export async function GET(
         }
 
         // Only allow access if user is the employee, substitute, manager, or an admin
-        const isEmployee = absence.userId === session.user.id;
-        const isSubstitute = absence.substitute?.userId === session.user.id;
-        // In reality we should check for manager role or if session user is manager of the employee
-        const userRole = (session.user as any).role;
-        const isAdmin = userRole === 'admin' || userRole === 'manager';
+        const isEmployee = absence.userId === dbUser.entraId;
+        const isSubstitute = absence.substitute?.userId === dbUser.entraId;
+        const isAdmin = dbUser.role === 'admin' || dbUser.role === 'manager';
 
         if (!isEmployee && !isSubstitute && !isAdmin) {
             return new NextResponse('Forbidden', { status: 403 });

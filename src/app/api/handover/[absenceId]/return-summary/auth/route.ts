@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRole } from '@/lib/rbac';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
 import User from '@/models/User';
@@ -14,10 +13,7 @@ export async function POST(
     { params }: { params: { absenceId: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.id) {
-            return new NextResponse('Unauthorized', { status: 401 });
-        }
+        const { dbUser } = await requireRole(['employee', 'manager', 'admin']);
 
         const body = await request.json();
         const summary = body.summary;
@@ -28,9 +24,8 @@ export async function POST(
         const absence = await Absence.findById(params.absenceId);
         if (!absence || !absence.handover) return new NextResponse('Not found', { status: 404 });
 
-        const isSubstitute = absence.substitute?.userId === session.user.id;
-        const userRole = (session.user as any).role;
-        const isAdmin = userRole === 'admin' || userRole === 'manager';
+        const isSubstitute = absence.substitute?.userId === dbUser.entraId;
+        const isAdmin = dbUser.role === 'admin' || dbUser.role === 'manager';
         if (!isSubstitute && !isAdmin) {
             return new NextResponse('Forbidden', { status: 403 });
         }
@@ -39,7 +34,7 @@ export async function POST(
         absence.handover.returnSummary = {
             content: summary.trim(),
             createdAt: new Date(),
-            createdBy: session.user.id,
+            createdBy: dbUser.entraId,
         };
         absence.markModified('handover.returnSummary');
         await absence.save();

@@ -4,8 +4,7 @@
 // ========================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRole } from '@/lib/rbac';
 import { getSickLeaveTrends } from '@/lib/services/analyticsService';
 
 /**
@@ -18,22 +17,8 @@ import { getSickLeaveTrends } from '@/lib/services/analyticsService';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // ✅ CHECK: Only managers and admins can see sick trends
-    const { default: connectDB } = await import('@/lib/mongodb');
-    const { default: User } = await import('@/models/User');
-    await connectDB();
-    
-    const currentUser = await User.findOne({ email: session.user.email });
-    if (!currentUser || (currentUser.role !== 'manager' && currentUser.role !== 'admin')) {
-      return NextResponse.json({ 
-        error: 'Forbidden - Only managers and admins can access analytics' 
-      }, { status: 403 });
-    }
+    // 🔒 Security: Only managers and admins can see sick trends
+    await requireRole(['manager', 'admin']);
 
     const { searchParams } = new URL(request.url);
     const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString());

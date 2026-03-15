@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRole } from '@/lib/rbac';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 
 export async function GET(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        // 🔒 Security: All authenticated users can read department list
+        await requireRole(['employee', 'manager', 'admin']);
 
         await connectDB();
 

@@ -1,4 +1,4 @@
-// src/lib/teams-bot.ts
+// src/app/api/teams-bot.ts
 //
 // FIXED: AclCheckFailed → Chat-Erstellung via Delegated Permissions (bevorzugt)
 // Fallback: Application Permissions (Bot → User)
@@ -34,11 +34,10 @@ async function getBotUserId(): Promise<string> {
       .get();
     if (sp.value?.[0]?.id) {
       _botUserIdCache = sp.value[0].id;
-      console.log(`🤖 Bot User ID: ${_botUserIdCache} (${sp.value[0].displayName})`);
-      return _botUserIdCache;
+      return _botUserIdCache!;
     }
   } catch (e: any) {
-    console.error('❌ Bot User ID nicht gefunden:', e.message);
+    console.error('Bot User ID lookup failed:', e.message);
   }
   throw new Error('AZURE_BOT_USER_ID nicht gesetzt');
 }
@@ -61,13 +60,12 @@ async function sendAppBotCard(
     }],
   };
 
-  // ✅ STRATEGIE 1: Delegated Permissions (bevorzugt)
+  // STRATEGIE 1: Delegated Permissions (bevorzugt)
   try {
     const client = await getDelegatedGraphClient();
     const me = await client.api('/me').select('id').get();
 
     if (toUserId === me.id) {
-      console.log('⚠️ Skipping self-message');
       return { success: true };
     }
 
@@ -95,20 +93,18 @@ async function sendAppBotCard(
         const existingId = body?.error?.innerError?.existingChatId || body?.innerError?.existingChatId;
         if (existingId) {
           chatId = existingId;
-          console.log('✅ Bestehender Chat verwendet:', chatId);
         } else throw err;
       } else throw err;
     }
 
     await client.api(`/chats/${chatId}/messages`).post(payload);
-    console.log(`✅ Card gesendet (delegated) an: ${toUserId}`);
     return { success: true };
 
   } catch (delegatedError: any) {
-    console.warn('⚠️ Delegated fehlgeschlagen, versuche Application Permissions...', delegatedError.message);
+    console.warn('Delegated send failed, falling back to Application Permissions:', delegatedError.message);
   }
 
-  // ✅ STRATEGIE 2: Application Permissions (Fallback)
+  // STRATEGIE 2: Application Permissions (Fallback)
   try {
     const botUserId = await getBotUserId();
     let chatId: string | null = null;
@@ -125,7 +121,7 @@ async function sendAppBotCard(
       );
       if (existingChat) chatId = existingChat.id;
     } catch {
-      console.log('⚠️ Chat-Suche fehlgeschlagen...');
+      // Chat lookup failed — will create a new one below
     }
 
     if (!chatId) {
@@ -148,11 +144,10 @@ async function sendAppBotCard(
     }
 
     await graphClient.api(`/chats/${chatId}/messages`).post(payload);
-    console.log(`✅ Card gesendet (application) an: ${toUserId}`);
     return { success: true };
 
   } catch (appError: any) {
-    console.error(`❌ Card senden fehlgeschlagen für ${toUserId}:`, appError.message);
+    console.error(`Failed to send card to ${toUserId}:`, appError.message);
     return { success: false, error: appError };
   }
 }

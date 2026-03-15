@@ -14,12 +14,17 @@ export interface IUser {
   jobTitle?: string;
   managerId?: string;
   managerEmail?: string;
+  departmentId?: string;
+  personioId?: number;
+  entraGroups?: string[];
+  lastSyncedAt?: Date;
   role: 'employee' | 'manager' | 'admin';
   vacationDays: {
     total: number;
     used: number;
     remaining: number;
     carryOver?: number;
+    source?: 'local' | 'personio';
   };
   startDate?: Date;
   isActive: boolean;
@@ -35,4 +40,5 @@ export interface VacationBalance {
   used: number;
   remaining: number;
   carryOver?: number;
+  source?: 'local' | 'personio';
 }

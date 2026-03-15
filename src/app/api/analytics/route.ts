@@ -37,21 +37,17 @@ export async function GET(request: NextRequest) {
 
     const query: AnalyticsQuery = { year, month, department };
 
-    // 🔒 Security: Managers can only see their own team's analytics (unless filtering by department)
+    // 🔒 Security: Managers can only see their own team's analytics
     if (dbUser.role === 'manager') {
-      // If manager tries to view a department, we should check if they are allowed (e.g. head of department)
-      // For now, we restrict managers to their direct reports if no department is specified
-      // If department is specified, we might want to restrict it too, but let's assume for now managers see their team stats
-
-      // Simplification: Managers always see their team stats unless they are admins
-      // If we want to allow managers to see department stats, we need more complex logic
-      // For this iteration, we enforce managerId filter for managers
+      // Limit to direct reports by default
       query.managerId = dbUser.entraId;
 
-      // If department is requested, we might want to block it or allow it if it matches their department
+      // If a specific department is requested, verify the manager belongs to it
       if (department && dbUser.department !== department) {
-        // Optional: Block access to other departments
-        // return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return NextResponse.json(
+          { error: 'Forbidden: Managers can only view their own department' },
+          { status: 403 }
+        );
       }
     }
 

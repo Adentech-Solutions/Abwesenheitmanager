@@ -6,9 +6,14 @@ import { sendReturnPromptCard } from '@/lib/teams-bot';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+    // Require CRON_SECRET to be configured — fail loudly if missing
+    if (!process.env.CRON_SECRET) {
+        return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 });
+    }
+
     // Basic API Key protection for cron endpoints
     const authHeader = request.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
         return new NextResponse('Unauthorized', { status: 401 });
     }
 

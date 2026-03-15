@@ -5,12 +5,9 @@ import Holiday from '@/models/Holiday';
 
 export async function GET(request: NextRequest) {
     try {
+        // 🔒 Security: All authenticated users can read holidays (needed for absence/calendar calculations)
+        await requireRole(['employee', 'manager', 'admin']);
         await connectDB();
-        // Allow authenticated users to fetch holidays (needed for calendar/calculations)
-        // But for now, let's restrict management to admins.
-        // Reading might be needed by everyone, but let's check role if we want to be strict.
-        // Actually, employees need to know holidays for absence calculation.
-        // So GET is open to authenticated users (middleware handles auth), POST/DELETE for admins.
 
         const { searchParams } = new URL(request.url);
         const year = searchParams.get('year');

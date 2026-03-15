@@ -1,4 +1,4 @@
-// src/app/api/absences/route.ts - UPDATED
+// src/app/api/absences/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -57,77 +57,49 @@ export async function GET(request: NextRequest) {
 
 // POST /api/absences - Create absence
 export async function POST(request: NextRequest) {
-  console.log('🟦 POST /api/absences - START');
-
   try {
-    console.log('🟦 1. Getting session...');
-    const session = await getServerSession(authOptions);
-    console.log('🟦 Session:', session ? 'exists' : 'null', session?.user?.email);
+    const { user, dbUser } = await requireRole(['employee', 'manager', 'admin']);
 
-    if (!session?.user?.email) {
-      console.log('❌ No session, returning 401');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    console.log('🟦 2. Connecting to MongoDB...');
     await connectDB();
-    console.log('✅ MongoDB connected');
 
-    console.log('🟦 3. Reading request body...');
     const body = await request.json();
-    console.log('🟦 Body:', JSON.stringify(body, null, 2));
-
-    console.log('🟦 4. Validating with Zod...');
     const validated = absenceSchema.parse(body);
-    console.log('✅ Validation passed');
 
-    console.log('🟦 5. Finding user in DB...');
-    const user = await User.findOne({ email: session.user.email });
-    console.log('🟦 User:', user ? `Found: ${user.email}` : 'NOT FOUND');
-
-    if (!user) {
-      console.log('❌ User not in DB, returning 404');
+    // dbUser is already fetched by requireRole — no second DB call needed
+    if (!dbUser) {
       return NextResponse.json({
         error: 'User not found. Please logout and login again to create your account.'
       }, { status: 404 });
     }
 
-    console.log('🟦 6. Calculating working days...');
     const totalDays = calculateWorkingDays(
       new Date(validated.startDate),
       new Date(validated.endDate),
       validated.isHalfDay
     );
-    console.log('🟦 Total days:', totalDays);
 
-    // ⭐ NEU: Auto-Reply Settings vorbereiten
-    console.log('🟦 6.5. Preparing auto-reply settings...');
-
-    // Default Werte aus Body oder Smart Defaults
-    const autoReplyEnabled = validated.autoReplySettings?.enabled == true;  // Default: true
+    // Auto-Reply Settings
+    const autoReplyEnabled = validated.autoReplySettings?.enabled == true;
     const hasSubstitute = validated.autoReplySettings?.hasSubstitute || false;
     const substituteInfo = validated.autoReplySettings?.substituteInfo;
     const recipients = {
-      internal: validated.autoReplySettings?.recipients?.internal !== false,  // Default: true
-      external: validated.autoReplySettings?.recipients?.external !== false,  // Default: true
+      internal: validated.autoReplySettings?.recipients?.internal !== false,
+      external: validated.autoReplySettings?.recipients?.external !== false,
     };
     const timing = {
       activateImmediately: validated.autoReplySettings?.timing?.activateImmediately || false,
-      scheduledDate: validated.startDate,  // Startdatum der Abwesenheit
-      scheduledTime: validated.autoReplySettings?.timing?.scheduledTime || '00:00',  // Default: Mitternacht
+      scheduledDate: validated.startDate,
+      scheduledTime: validated.autoReplySettings?.timing?.scheduledTime || '00:00',
     };
 
-    // Auto-Reply Nachricht generieren
     const autoReplyMessages = generateAutoReplyMessage({
-      userName: user.name,
+      userName: dbUser.name,
       startDate: new Date(validated.startDate),
       endDate: new Date(validated.endDate),
       substitute: substituteInfo,
     });
 
-    console.log('✅ Auto-reply messages generated');
-
-    // 🟦 6.6. Resolve substitute user data
+    // Resolve substitute user data
     let substituteData: any = undefined;
     if (validated.substitute?.email) {
       const subUser = await User.findOne({ email: validated.substitute.email });
@@ -154,7 +126,7 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // 🟦 6.7. Prepare handover data
+    // Prepare handover data
     let handoverData: any = undefined;
     if (validated.handover?.enabled && validated.handover.items) {
       handoverData = {
@@ -170,11 +142,10 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    console.log('🟦 7. Creating absence in DB...');
     const absence = await Absence.create({
-      userId: user.entraId,
-      userEmail: user.email,
-      userName: user.name,
+      userId: dbUser.entraId,
+      userEmail: dbUser.email,
+      userName: dbUser.name,
       type: validated.type,
       startDate: validated.startDate,
       endDate: validated.endDate,
@@ -201,20 +172,13 @@ export async function POST(request: NextRequest) {
         generatedMessage: autoReplyMessages,
       },
     });
-    console.log('✅ Absence created:', absence._id);
 
-    // 🆕 Benachrichtigungen senden (nur wenn nicht Krankmeldung)
-    if (validated.type !== 'sick' && user.managerEmail) {
-      console.log('🟦 8. Sending notifications to manager:', user.managerEmail);
-
-      // Manager aus DB holen
-      const manager = await User.findOne({ email: user.managerEmail });
+    // Send notifications (only for non-sick absences)
+    if (validated.type !== 'sick' && dbUser.managerEmail) {
+      const manager = await User.findOne({ email: dbUser.managerEmail });
 
       if (manager && manager.entraId) {
-        // ⭐ Email Benachrichtigung
         try {
-          console.log('📧 Sending email notification...');
-
           await sendNotificationEmail({
             to: manager.email,
             subject: `🏖️ Neuer Abwesenheitsantrag von ${absence.userName}`,
@@ -226,24 +190,19 @@ export async function POST(request: NextRequest) {
               absence.totalDays,
               `${process.env.NEXT_PUBLIC_APP_URL}/manager/approvals`
             ),
-            fromEmail: user.email,
+            fromEmail: dbUser.email,
           });
-
-          console.log('✅ Email sent to manager');
         } catch (error) {
-          console.error('Failed to send email:', error);
+          console.error('Failed to send email notification:', error);
         }
 
-        // ⭐ Teams Benachrichtigung
         try {
-          console.log('💬 Sending Teams notification...');
-
           await sendApprovalNotification(
-            user.entraId,      // ← VON: Employee (Salem)
-            manager.entraId,   // ← AN: Manager (Adele)
+            dbUser.entraId,
+            manager.entraId,
             manager.email,
             {
-              id: (absence as any)._id.toString(), // Added for Magic Links
+              id: (absence as any)._id.toString(),
               employeeName: absence.userName,
               type: formatAbsenceType(absence.type),
               startDate: new Date(absence.startDate).toLocaleDateString('de-DE'),
@@ -252,25 +211,16 @@ export async function POST(request: NextRequest) {
               approvalLink: `${process.env.NEXT_PUBLIC_APP_URL}/manager/approvals`,
             }
           );
-
-          console.log('✅ Teams notification sent');
         } catch (error) {
           console.error('Failed to send Teams notification:', error);
         }
-      } else {
-        console.log('⚠️ Manager not found in DB or missing entraId');
       }
-    } else {
-      console.log('⚠️ No notifications: type=', validated.type, 'managerEmail=', user.managerEmail);
     }
 
-    console.log('🟦 9. Returning response...');
     return NextResponse.json({ absence }, { status: 201 });
 
   } catch (error: any) {
-    console.error('❌ ERROR:', error);
-    console.error('❌ Error message:', error.message);
-    console.error('❌ Error stack:', error.stack);
+    console.error('Error creating absence:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to create absence' },
       { status: 500 }

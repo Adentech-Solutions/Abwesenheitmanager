@@ -3,8 +3,7 @@
 // GET: Magic link acknowledge (token-based)
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRole } from '@/lib/rbac';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
 import User from '@/models/User';
@@ -23,10 +22,7 @@ export async function POST(
   { params }: { params: { absenceId: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { dbUser } = await requireRole(['employee', 'manager', 'admin']);
 
     await connectDB();
 
@@ -36,7 +32,7 @@ export async function POST(
     }
 
     // Security: verify the authenticated user IS the substitute
-    if (absence.substitute?.email !== session.user.email) {
+    if (absence.substitute?.email !== dbUser.email) {
       return NextResponse.json({ error: 'Forbidden: You are not the substitute for this absence' }, { status: 403 });
     }
 
@@ -50,14 +46,12 @@ export async function POST(
     absence.set('substitute.acknowledgedAt', new Date());
     await absence.save();
 
-    // Find substitute user for name
-    const substituteUser = await User.findOne({ email: session.user.email });
-    const substituteName = substituteUser?.name || session.user.name || 'Vertretung';
+    const substituteName = dbUser.name || 'Vertretung';
 
     // Send Teams notification to employee
     try {
       await sendHandoverAcknowledged(
-        substituteUser?.entraId || '',
+        dbUser.entraId,
         absence.userId,
         substituteName,
       );
@@ -68,8 +62,8 @@ export async function POST(
 
     // Phase 1b: Send Tracker Card to substitute
     try {
-      if (substituteUser?.entraId) {
-        await sendHandoverTrackerCard(substituteUser.entraId, {
+      if (dbUser.entraId) {
+        await sendHandoverTrackerCard(dbUser.entraId, {
           id: absence.id,
           employeeName: absence.userName,
           startDate: new Date(absence.startDate).toISOString(),
@@ -83,8 +77,8 @@ export async function POST(
 
     // Audit log
     await auditLog(
-      substituteUser?.entraId || '',
-      session.user.email,
+      dbUser.entraId,
+      dbUser.email,
       'updated',
       'absence',
       params.absenceId,
