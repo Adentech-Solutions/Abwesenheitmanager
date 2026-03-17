@@ -73,7 +73,7 @@ const UserSchema = new Schema<IUserDocument>(
     },
     role: {
       type: String,
-      enum: ['employee', 'manager', 'admin'],
+      enum: ['employee', 'teamlead', 'manager', 'hr_manager', 'admin'],
       default: 'employee',
     },
     vacationDays: {

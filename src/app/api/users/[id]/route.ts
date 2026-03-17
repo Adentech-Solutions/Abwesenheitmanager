@@ -83,6 +83,42 @@ export async function PUT(
             }
         }
 
+        // Fix: vacationDays as plain number → convert to object
+        if (body.vacationDays !== undefined && typeof body.vacationDays === 'number') {
+            body.vacationDays = {
+                total: body.vacationDays,
+                used: targetUser.vacationDays?.used || 0,
+                remaining: body.vacationDays - (targetUser.vacationDays?.used || 0),
+                carryOver: targetUser.vacationDays?.carryOver || 0,
+                source: targetUser.vacationDays?.source || 'local',
+            };
+        }
+
+        // Role change validation: prevent invalid transitions
+        if (body.role && body.role !== targetUser.role) {
+            const currentRole = targetUser.role;
+            const newRole = body.role;
+            
+            // Managers with direct reports in Entra should not be downgraded to employee/teamlead
+            // They can be upgraded to hr_manager or admin
+            if (currentRole === 'manager' && ['employee', 'teamlead'].includes(newRole)) {
+                // Check if user actually has direct reports
+                try {
+                    const { getUserDirectReports } = await import('@/lib/graph-client');
+                    const reports = await getUserDirectReports(targetUser.entraId);
+                    if (reports && reports.length > 0) {
+                        return NextResponse.json({ 
+                            error: 'Dieser Benutzer hat Direct Reports in Entra ID und kann nicht zum ' + 
+                                   (newRole === 'employee' ? 'Mitarbeiter' : 'Team Lead') + 
+                                   ' herabgestuft werden.' 
+                        }, { status: 400 });
+                    }
+                } catch {
+                    // If Graph check fails, allow the change (non-critical)
+                }
+            }
+        }
+
         // Update allowed fields
         // Ensure we don't accidentally update immutable fields like entraId or email via this route if we don't want to
         const allowedUpdates = ['managerId', 'department', 'isActive'];

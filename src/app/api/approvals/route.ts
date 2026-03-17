@@ -1,23 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRole, getTeamMemberEmails } from '@/lib/rbac';
+import { requireRole, getTeamMemberEmails, getDepartmentMemberEmails } from '@/lib/rbac';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
 
 export async function GET(request: NextRequest) {
   try {
-    // 🔒 Security: Require Manager or Admin role
-    const { dbUser } = await requireRole(['manager', 'admin']);
+    // 🔒 Security: Require active approver roles
+    const { dbUser } = await requireRole(['manager', 'teamlead', 'hr_manager', 'admin']);
 
     await connectDB();
 
     let query: any = { status: 'pending' };
 
-    // 🔒 Security: Managers only see their team's requests
     if (dbUser.role === 'manager') {
       const teamEmails = await getTeamMemberEmails(dbUser.entraId);
       query.userEmail = { $in: teamEmails };
+    } else if (dbUser.role === 'teamlead') {
+      // Teamleads see pending approvals from their department
+      const deptEmails = await getDepartmentMemberEmails(dbUser.department);
+      query.userEmail = { $in: deptEmails };
+    } else if (dbUser.role === 'hr_manager') {
+      // HR managers see ALL pending approvals
+      // No filter needed — show everything
     }
-    // Admins see all pending requests (no additional filter needed)
+    // Admin also sees all requests
 
     const pendingApprovals = await Absence.find(query).sort({ createdAt: -1 });
 

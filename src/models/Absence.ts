@@ -214,6 +214,10 @@ const AbsenceSchema = new Schema<IAbsenceDocument>(
       type: Boolean,
       default: false,
     },
+    personioAbsenceId: {
+      type: String,
+      index: { sparse: true },
+    },
   },
   {
     timestamps: true,

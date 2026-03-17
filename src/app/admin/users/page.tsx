@@ -7,7 +7,7 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
-import { Search, User as UserIcon, Plus, Edit2, Shield, Briefcase } from 'lucide-react';
+import { Search, User as UserIcon, Plus, Edit2, Shield, Briefcase, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { IUser } from '@/types/user'; // Ensure this type exists or substitute with any
 // If types/user doesn't exist, I'll define a local interface.
@@ -18,7 +18,7 @@ interface UserData {
     _id: string;
     name: string;
     email: string;
-    role: 'admin' | 'manager' | 'employee';
+    role: 'admin' | 'hr_manager' | 'manager' | 'teamlead' | 'employee';
     department?: string;
     vacationDays: {
         total: number;
@@ -113,6 +113,52 @@ export default function UserManagementPage() {
             toast.error(error.message);
         },
     });
+
+    const { data: entraData, isLoading: isLoadingEntra, refetch: refetchEntra } = useQuery({
+        queryKey: ['admin-entra-users'],
+        queryFn: async () => {
+            const res = await fetch('/api/admin/users/entra-preview');
+            if (!res.ok) throw new Error('Failed to fetch Entra users');
+            return res.json();
+        },
+        enabled: false,
+    });
+
+    const entraUsers = entraData?.users || [];
+    const newEntraUsers = entraUsers.filter((u: any) => !u.existsLocally);
+
+    const importMutation = useMutation({
+        mutationFn: async (usersToImport: any[]) => {
+            const res = await fetch('/api/admin/users/entra-import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ users: usersToImport }),
+            });
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Failed to import users');
+            }
+            return res.json();
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+            refetchEntra(); // Refresh preview state
+            toast.success(`${data.imported} importiert, ${data.skipped} übersprungen, ${data.errors} Fehler`);
+        },
+        onError: (error: any) => {
+            toast.error(`Import fehlgeschlagen: ${error.message}`);
+        },
+    });
+
+    const handleImportSingle = (user: any) => {
+        importMutation.mutate([user]);
+    };
+
+    const handleImportAll = () => {
+        if (newEntraUsers.length > 0) {
+            importMutation.mutate(newEntraUsers);
+        }
+    };
 
     const handleCreate = (e: React.FormEvent) => {
         e.preventDefault();
@@ -210,13 +256,17 @@ export default function UserManagementPage() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full border ${user.role === 'admin'
-                                                    ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                                    : user.role === 'manager'
-                                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                                        : 'bg-green-50 text-green-700 border-green-200'
+                                                    ? 'bg-red-50 text-red-700 border-red-200'
+                                                    : user.role === 'hr_manager'
+                                                        ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                                        : user.role === 'manager'
+                                                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                            : user.role === 'teamlead'
+                                                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                                                : 'bg-green-50 text-green-700 border-green-200'
                                                     }`}>
-                                                    {user.role === 'admin' && <Shield className="w-3 h-3 mr-1 self-center" />}
-                                                    {user.role}
+                                                    {(user.role === 'admin' || user.role === 'hr_manager') && <Shield className="w-3 h-3 mr-1 self-center" />}
+                                                    {user.role === 'hr_manager' ? 'HR-Manager' : user.role === 'teamlead' ? 'Team Lead' : user.role === 'employee' ? 'Mitarbeiter' : user.role}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -247,6 +297,71 @@ export default function UserManagementPage() {
                     </div>
                 </Card>
 
+                {/* Entra User Import Section */}
+                <div className="mt-8">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-semibold text-gray-900">Entra ID Benutzer importieren</h2>
+                        <Button variant="outline" onClick={() => refetchEntra()} isLoading={isLoadingEntra}>
+                            <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingEntra ? 'animate-spin' : ''}`} />
+                            Benutzer aus Entra ID laden
+                        </Button>
+                    </div>
+
+                    {entraUsers.length > 0 && (
+                        <Card>
+                            {newEntraUsers.length > 0 && (
+                                <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center rounded-t-lg">
+                                    <span className="text-sm text-gray-600 font-medium">{newEntraUsers.length} neue Benutzer gefunden</span>
+                                    <Button 
+                                        size="sm" 
+                                        onClick={handleImportAll}
+                                        isLoading={importMutation.isPending}
+                                    >
+                                        Alle neuen importieren
+                                    </Button>
+                                </div>
+                            )}
+                            <ul className="divide-y divide-gray-200 p-2">
+                                {entraUsers.map((u: any) => (
+                                    <li key={u.entraId} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-gray-50 rounded-lg gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                                                <UserIcon className="h-5 w-5" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium text-gray-900">{u.name}</p>
+                                                <p className="text-sm text-gray-500">{u.email}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex-1 text-sm text-gray-500 sm:text-center">
+                                            {u.department ? <span className="block">{u.department}</span> : <span className="block italic text-gray-300">Keine Abteilung</span>}
+                                            {u.jobTitle ? <span className="block text-gray-400">{u.jobTitle}</span> : <span className="block italic text-gray-300 mt-0.5">Kein Jobtitel</span>}
+                                        </div>
+
+                                        <div className="shrink-0 flex items-center justify-end">
+                                            {u.existsLocally ? (
+                                                <span className="text-sm text-green-600 font-medium px-3 py-1 bg-green-50 rounded-full border border-green-200">
+                                                    Bereits vorhanden
+                                                </span>
+                                            ) : (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="secondary"
+                                                    onClick={() => handleImportSingle(u)}
+                                                    isLoading={importMutation.isPending}
+                                                >
+                                                    Importieren
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </Card>
+                    )}
+                </div>
+
                 {/* Create Modal */}
                 <Modal
                     isOpen={isCreateModalOpen}
@@ -275,7 +390,9 @@ export default function UserManagementPage() {
                                 onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                             >
                                 <option value="employee">Mitarbeiter</option>
+                                <option value="teamlead">Team Lead</option>
                                 <option value="manager">Manager</option>
+                                <option value="hr_manager">HR-Manager</option>
                                 <option value="admin">Administrator</option>
                             </select>
                         </div>
@@ -324,9 +441,17 @@ export default function UserManagementPage() {
                                 onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                             >
                                 <option value="employee">Mitarbeiter</option>
+                                <option value="teamlead">Team Lead</option>
                                 <option value="manager">Manager</option>
+                                <option value="hr_manager">HR-Manager</option>
                                 <option value="admin">Administrator</option>
                             </select>
+                            {selectedUser?.role === 'manager' && (
+                                <p className="text-xs text-blue-600 mt-1">
+                                    Manager-Rolle wird automatisch aus Entra ID erkannt 
+                                    (Direct Reports vorhanden). Upgrade zu HR-Manager oder Admin möglich.
+                                </p>
+                            )}
                         </div>
                         <Input
                             label="Abteilung"

@@ -18,7 +18,7 @@ export default async function AdminLayout({
     await connectDB();
     const user = await User.findOne({ email: session.user.email });
 
-    if (!user || user.role !== 'admin') {
+    if (!user || !['hr_manager', 'admin'].includes(user.role)) {
         redirect('/dashboard');
     }
 

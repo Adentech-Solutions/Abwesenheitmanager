@@ -18,7 +18,7 @@ export default async function ManagerLayout({
     await connectDB();
     const user = await User.findOne({ email: session.user.email });
 
-    if (!user || (user.role !== 'manager' && user.role !== 'admin')) {
+    if (!user || !['manager', 'teamlead', 'hr_manager', 'admin'].includes(user.role)) {
         redirect('/dashboard');
     }
 

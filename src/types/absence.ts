@@ -130,6 +130,7 @@ export interface IAbsence {
   handover?: Handover;
   autoReplySettings?: AutoReplySettings;
   conflictWarning?: boolean;
+  personioAbsenceId?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }

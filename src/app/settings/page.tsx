@@ -108,7 +108,9 @@ export default function SettingsPage() {
     // Redirect non-admins
     useEffect(() => {
         if (status === 'loading') return;
-        if (!session || userRole !== 'admin') router.push('/dashboard');
+        if (!session) { router.push('/'); return; }
+        if (userRole === undefined) return;
+        if (userRole !== 'admin') router.push('/dashboard');
     }, [session, status, userRole, router]);
 
     // Load settings
@@ -173,10 +175,10 @@ export default function SettingsPage() {
         onError: (err: any) => toast.error(err.message || 'Fehler beim Speichern'),
     });
 
-    if (status === 'loading' || isLoading) {
+    if (status === 'loading' || (status === 'authenticated' && userRole === undefined) || isLoading) {
         return (
             <DashboardLayout>
-                <div className="flex items-center justify-center min-h-64">
+                <div className="flex items-center justify-center h-64">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
                 </div>
             </DashboardLayout>

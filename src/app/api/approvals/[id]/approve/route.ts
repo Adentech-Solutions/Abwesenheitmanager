@@ -17,8 +17,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    // 🔒 Security: Require Manager or Admin role
-    const { user: sessionUser, dbUser: manager } = await requireRole(['manager', 'admin']);
+    // 🔒 Security: Require Manager, HR Manager, or Admin role
+    const { user: sessionUser, dbUser: manager } = await requireRole(['manager', 'teamlead', 'hr_manager', 'admin']);
 
     await connectDB();
 
@@ -31,13 +31,21 @@ export async function POST(
       return NextResponse.json({ error: 'Absence already processed' }, { status: 400 });
     }
 
-    // 🔒 Security: Managers can only approve their own direct reports' requests
-    if (manager.role === 'manager') {
+    // 🔒 Security: Managers can only approve their own direct reports' requests (or TeamLeads within their department)
+    if (manager.role === 'manager' || manager.role === 'teamlead') {
       const absenceOwner = await User.findOne({ email: absence.userEmail });
+      
       if (absenceOwner?.managerId !== manager.entraId) {
-        return NextResponse.json({ error: 'Forbidden: Not the manager of this employee' }, { status: 403 });
+        if (manager.role === 'teamlead') {
+          if (absenceOwner?.department !== manager.department) {
+            return NextResponse.json({ error: 'Forbidden: Team leads can only approve within their department' }, { status: 403 });
+          }
+        } else {
+          return NextResponse.json({ error: 'Forbidden: Not the manager of this employee' }, { status: 403 });
+        }
       }
     }
+    // hr_manager and admin can approve anyone — no additional check needed
 
     // Approve absence
     await absence.approve(manager.entraId, manager.email);
@@ -188,6 +196,20 @@ export async function POST(
         console.error('Error sending handover notification:', error);
         // Non-critical — don't fail the approval
       }
+    }
+
+    // Personio write-back (last step, non-blocking)
+    try {
+      const absenceOwner = await User.findOne({ email: absence.userEmail });
+      if (absenceOwner?.personioId && absence.type === 'vacation') {
+        const { writeBackAbsenceToPersonio } = await import('@/lib/services/personioSync');
+        const result = await writeBackAbsenceToPersonio(absence, absenceOwner);
+        if (!result.success) {
+          console.error('Personio write-back skipped:', result.reason);
+        }
+      }
+    } catch (error) {
+      console.error('Personio write-back failed:', error);
     }
 
     return NextResponse.json({

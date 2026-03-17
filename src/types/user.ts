@@ -18,7 +18,7 @@ export interface IUser {
   personioId?: number;
   entraGroups?: string[];
   lastSyncedAt?: Date;
-  role: 'employee' | 'manager' | 'admin';
+  role: 'employee' | 'teamlead' | 'manager' | 'hr_manager' | 'admin';
   vacationDays: {
     total: number;
     used: number;

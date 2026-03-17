@@ -14,8 +14,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    // 🔒 Security: Require Manager or Admin role
-    const { user: sessionUser, dbUser: manager } = await requireRole(['manager', 'admin']);
+    // 🔒 Security: Require Manager, HR Manager, or Admin role
+    const { user: sessionUser, dbUser: manager } = await requireRole(['manager', 'teamlead', 'hr_manager', 'admin']);
 
     await connectDB();
 
@@ -31,13 +31,21 @@ export async function POST(
       return NextResponse.json({ error: 'Absence already processed' }, { status: 400 });
     }
 
-    // 🔒 Security: Managers can only reject their own direct reports' requests
-    if (manager.role === 'manager') {
+    // 🔒 Security: Managers can only reject their own direct reports' requests (or TeamLeads within their department)
+    if (manager.role === 'manager' || manager.role === 'teamlead') {
       const absenceOwner = await User.findOne({ email: absence.userEmail });
+      
       if (absenceOwner?.managerId !== manager.entraId) {
-        return NextResponse.json({ error: 'Forbidden: Not the manager of this employee' }, { status: 403 });
+        if (manager.role === 'teamlead') {
+          if (absenceOwner?.department !== manager.department) {
+            return NextResponse.json({ error: 'Forbidden: Team leads can only reject within their department' }, { status: 403 });
+          }
+        } else {
+          return NextResponse.json({ error: 'Forbidden: Not the manager of this employee' }, { status: 403 });
+        }
       }
     }
+    // hr_manager and admin can reject anyone — no additional check needed
 
     // Reject absence
     await absence.reject(manager.entraId, manager.email, reason || 'Keine Begründung angegeben');

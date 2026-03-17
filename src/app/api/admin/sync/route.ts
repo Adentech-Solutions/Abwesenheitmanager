@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         await connectDB();
 
         // Find the most recent SyncLog for each syncType
-        const syncTypes = ['entra_groups', 'entra_users', 'personio_vacation'];
+        const syncTypes = ['entra_groups', 'entra_users', 'personio_vacation', 'personio_employees'];
         const lastSyncs: any = {};
 
         for (const type of syncTypes) {

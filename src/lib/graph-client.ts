@@ -510,3 +510,28 @@ export async function getGroupMembers(groupId: string) {
     throw error;
   }
 }
+
+// 🆕 HELPER: Get Entra Users (supports pagination)
+export async function getEntraUsers() {
+  try {
+    let allUsers: any[] = [];
+    let response = await graphClient
+      .api('/users')
+      .select('id,displayName,mail,department,jobTitle,userPrincipalName')
+      .top(999)
+      .get();
+    
+    allUsers = response.value || [];
+    
+    while (response['@odata.nextLink']) {
+      response = await graphClient.api(response['@odata.nextLink']).get();
+      allUsers = allUsers.concat(response.value || []);
+    }
+    
+    // Filter out service accounts (no mail) and external users
+    return allUsers.filter(u => u.mail && !u.mail.includes('#EXT#'));
+  } catch (error) {
+    console.error('Error fetching Entra users:', error);
+    throw error;
+  }
+}

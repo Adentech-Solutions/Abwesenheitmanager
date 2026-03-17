@@ -26,7 +26,7 @@ import { requireRole } from '@/lib/rbac';
 export async function GET(request: NextRequest) {
   try {
     // 🔒 Security: Only managers and admins can see analytics
-    const { dbUser } = await requireRole(['manager', 'admin']);
+    const { dbUser } = await requireRole(['manager', 'hr_manager', 'admin']);
 
     const { searchParams } = new URL(request.url);
     const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString());

@@ -138,6 +138,16 @@ export async function DELETE(
       }
     }
 
+    // Personio cancellation (if absence was synced)
+    if (absence.personioAbsenceId) {
+      try {
+        const { cancelAbsenceInPersonio } = await import('@/lib/services/personioSync');
+        await cancelAbsenceInPersonio(absence);
+      } catch (error) {
+        console.error('Personio cancellation failed:', error);
+      }
+    }
+
     return NextResponse.json({ message: 'Absence cancelled' });
   } catch (error) {
     console.error('Error deleting absence:', error);

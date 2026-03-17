@@ -30,6 +30,17 @@ export default function SyncPage() {
         },
     });
 
+    const { data: configData } = useQuery({
+        queryKey: ['admin-integration-personio'],
+        queryFn: async () => {
+            const res = await fetch('/api/admin/integrations/personio');
+            if (!res.ok) throw new Error('Failed to fetch Personio config');
+            return res.json();
+        },
+    });
+
+    const isPersonioConfigured = configData?.configured;
+
     // 2. Trigger Sync Mutation
     const syncMutation = useMutation({
         mutationFn: async (type: string) => {
@@ -63,6 +74,25 @@ export default function SyncPage() {
     const triggerEntraSync = () => {
         syncMutation.mutate('entra_groups');
     };
+
+    const personioSyncMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch('/api/admin/sync/personio', { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Sync fehlgeschlagen');
+            return data;
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ['admin-sync-status'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-sync-history'] });
+            if (data.status === 'completed') {
+                toast.success(`Personio Sync erfolgreich (${data.stats.updated} akt., ${data.stats.errors} Fehler)`);
+            } else {
+                toast.error('Personio Sync mit Fehlern beendet');
+            }
+        },
+        onError: (error: any) => toast.error(error.message),
+    });
 
     const lastSyncs = statusData?.lastSyncs || {};
     const history = historyData?.history || [];
@@ -148,7 +178,7 @@ export default function SyncPage() {
 
                     {/* Personio */}
                     <Card>
-                        <div className="p-5 opacity-75">
+                        <div className={`p-5 ${!isPersonioConfigured ? 'opacity-75' : ''}`}>
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-green-100 text-green-700 rounded-lg">
@@ -156,16 +186,28 @@ export default function SyncPage() {
                                     </div>
                                     <h3 className="font-semibold text-gray-900">Personio HR</h3>
                                 </div>
-                                <span className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium">
-                                    Gestoppt
-                                </span>
+                                {!isPersonioConfigured ? (
+                                    <a href="/admin/integrations" className="inline-flex items-center px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-medium cursor-pointer transition-colors">
+                                        Nicht konfiguriert
+                                    </a>
+                                ) : lastSyncs.personio_employees ? getStatusBadge(lastSyncs.personio_employees.status) : <span className="text-xs text-gray-500">Unbekannt</span>}
                             </div>
                             <p className="text-sm text-gray-500 mb-6">
-                                Holt Urlaubstage und Freigaben aus Personio. Setzt gültige API Keys voraus.
+                                Synchronisiert Urlaubskontingente und meldet genehmigte Anträge zurück.
                             </p>
                             <div className="flex items-center justify-between mt-auto">
-                                <span className="text-xs text-gray-400">Noch nicht implementiert</span>
-                                <Button size="sm" disabled variant="secondary">Sync Starten</Button>
+                                <div className="text-xs text-gray-500 flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    Zuletzt: {isLoadingStatus ? '...' : formatTime(lastSyncs.personio_employees?.completedAt)}
+                                </div>
+                                <Button 
+                                    size="sm" 
+                                    onClick={() => personioSyncMutation.mutate()}
+                                    isLoading={personioSyncMutation.isPending}
+                                    disabled={!isPersonioConfigured}
+                                >
+                                    Sync Starten
+                                </Button>
                             </div>
                         </div>
                     </Card>
