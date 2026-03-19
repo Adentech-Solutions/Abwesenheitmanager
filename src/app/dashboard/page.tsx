@@ -9,6 +9,7 @@ import UpcomingAbsences from '@/components/dashboard/UpcomingAbsences';
 import TeamOverview from '@/components/dashboard/TeamCalendar';
 import MySubstitutions from '@/components/dashboard/MySubstitutions';
 import WelcomeBack from '@/components/dashboard/WelcomeBack';
+import VacationSuggestions from '@/components/dashboard/VacationSuggestions';
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -45,6 +46,9 @@ export default function DashboardPage() {
           <div className="lg:col-span-2 space-y-6">
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-[450ms] fill-mode-both">
               <UpcomingAbsences />
+            </div>
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-[550ms] fill-mode-both">
+              <VacationSuggestions />
             </div>
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-[600ms] fill-mode-both">
               <MySubstitutions />

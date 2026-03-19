@@ -16,13 +16,9 @@ export default function TeamOverview() {
   const { data: session } = useSession();
   const userRole = (session?.user as any)?.role;
 
-  // Only show for managers and admins
-  if (userRole !== 'manager' && userRole !== 'admin') {
-    return null;
-  }
-
   const { data: teamData, isLoading } = useQuery({
     queryKey: ['team', 'absences', 'today'],
+    enabled: userRole === 'manager' || userRole === 'admin',
     queryFn: async () => {
       const response = await fetch('/api/calendar/team/today');
       if (!response.ok) {
@@ -33,6 +29,11 @@ export default function TeamOverview() {
     },
     retry: false,
   });
+
+  // Only show for managers and admins
+  if (userRole !== 'manager' && userRole !== 'admin') {
+    return null;
+  }
 
   const getInitials = (name: string) => {
     return name
