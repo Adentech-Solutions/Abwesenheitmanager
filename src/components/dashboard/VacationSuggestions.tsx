@@ -11,6 +11,12 @@ import { format, addDays, eachDayOfInterval, isWeekend } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { useVacationBalance } from '@/hooks/useVacationBalance';
+
+function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
 
 type VacationSuggestion = {
   id: string;
@@ -47,7 +53,7 @@ interface DayInfo {
   holidayName?: string;
 }
 
-function analyzeSuggestionDays(suggestion: VacationSuggestion): {
+function analyzeSuggestionDays(suggestion: VacationSuggestion, vacationStats: { remaining: number } | null): {
   days: DayInfo[];
   breakdown: {
     vacationDays: number;
@@ -56,8 +62,8 @@ function analyzeSuggestionDays(suggestion: VacationSuggestion): {
     totalFreeDays: number;
   };
 } {
-  const startDate = new Date(suggestion.startDate);
-  const endDate = new Date(suggestion.endDate);
+  const startDate = parseLocalDate(suggestion.startDate);
+  const endDate = parseLocalDate(suggestion.endDate);
 
   // Erstelle 2-wöchigen Zeitraum um den Vorschlag herum
   const calendarStart = addDays(startDate, -7);
@@ -103,8 +109,8 @@ function analyzeSuggestionDays(suggestion: VacationSuggestion): {
   };
 }
 
-function MiniCalendar({ suggestion }: { suggestion: VacationSuggestion }) {
-  const { days, breakdown } = analyzeSuggestionDays(suggestion);
+function MiniCalendar({ suggestion, vacationStats }: { suggestion: VacationSuggestion; vacationStats: { remaining: number } | null }) {
+  const { days, breakdown } = analyzeSuggestionDays(suggestion, vacationStats);
 
   return (
     <div className="space-y-4">
@@ -164,7 +170,7 @@ function MiniCalendar({ suggestion }: { suggestion: VacationSuggestion }) {
             <span className="font-semibold text-primary-600">{breakdown.totalFreeDays} Tage frei</span>
           </div>
           <div className="text-xs text-gray-500">
-            Resturlaub danach: Berechnung folgt...
+            Resturlaub danach: {vacationStats ? Math.max(0, vacationStats.remaining - suggestion.urlaubstage) : '?'} Tage
           </div>
         </div>
       </div>
@@ -185,6 +191,8 @@ export default function VacationSuggestions() {
       return res.json();
     },
   });
+
+  const { stats: vacationStats } = useVacationBalance();
 
   const suggestions: VacationSuggestion[] = data?.suggestions || [];
 
@@ -262,15 +270,15 @@ export default function VacationSuggestions() {
                             {typeLabel[suggestion.typ]}
                           </Badge>
                           <span className="text-xs text-gray-500 font-medium">
-                            {format(new Date(suggestion.startDate), 'dd. MMM yyyy', { locale: de })}
+                            {format(parseLocalDate(suggestion.startDate), 'dd. MMM yyyy', { locale: de })}
                             {suggestion.startDate !== suggestion.endDate && (
-                              <span>–{format(new Date(suggestion.endDate), 'dd. MMM yyyy', { locale: de })}</span>
+                              <span>–{format(parseLocalDate(suggestion.endDate), 'dd. MMM yyyy', { locale: de })}</span>
                             )}
                           </span>
                         </div>
 
                         <h4 className="text-base font-bold text-gray-900 mb-1">
-                          {suggestion.feiertag} ({format(new Date(suggestion.feiertagDatum), 'EEE dd.MM.', { locale: de })})
+                          {suggestion.feiertag} ({format(parseLocalDate(suggestion.feiertagDatum), 'EEE dd.MM.', { locale: de })})
                         </h4>
 
                         <p className="text-sm text-gray-700 mb-2">
@@ -303,7 +311,7 @@ export default function VacationSuggestions() {
                   {/* Erweiterte Ansicht */}
                   {isExpanded && (
                     <div className="mt-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                      <MiniCalendar suggestion={suggestion} />
+                      <MiniCalendar suggestion={suggestion} vacationStats={vacationStats} />
                       <div className="mt-4 flex justify-end">
                         <Button
                           onClick={(e) => {
