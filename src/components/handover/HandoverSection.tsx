@@ -3,6 +3,15 @@
 // src/components/handover/HandoverSection.tsx
 
 import React, { useState, useRef } from 'react';
+import { 
+    Plus, Trash2, ClipboardList, Info, ChevronUp, ChevronDown, 
+    AlertTriangle, Paperclip, Link as LinkIcon, AlertCircle, 
+    Calendar, CheckCircle2, Star, Sparkles, MessageSquare, Phone, XCircle
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
 
 // ─────────────────────────────────────────────
 // TYPES
@@ -48,56 +57,12 @@ const PRIORITY_CONFIG: Record<Priority, {
     label: string;
     activeClass: string;
     dotClass: string;
+    badgeVariant: 'success' | 'warning' | 'danger' | 'default';
 }> = {
-    high: { label: 'Hoch', activeClass: 'bg-red-50 border-red-300 text-red-700', dotClass: 'bg-red-500' },
-    medium: { label: 'Mittel', activeClass: 'bg-amber-50 border-amber-300 text-amber-700', dotClass: 'bg-amber-400' },
-    low: { label: 'Niedrig', activeClass: 'bg-green-50 border-green-300 text-green-700', dotClass: 'bg-green-500' },
+    high: { label: 'Hoch', activeClass: 'bg-rose-50 border-rose-300 text-rose-700', dotClass: 'bg-rose-500', badgeVariant: 'danger' },
+    medium: { label: 'Mittel', activeClass: 'bg-amber-50 border-amber-300 text-amber-700', dotClass: 'bg-amber-400', badgeVariant: 'warning' },
+    low: { label: 'Niedrig', activeClass: 'bg-emerald-50 border-emerald-300 text-emerald-700', dotClass: 'bg-emerald-500', badgeVariant: 'success' },
 };
-
-// ─────────────────────────────────────────────
-// TOGGLE SWITCH
-// ─────────────────────────────────────────────
-
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-    return (
-        <button
-            type="button"
-            onClick={() => onChange(!checked)}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${checked ? 'bg-blue-600' : 'bg-gray-300'
-                }`}
-            role="switch"
-            aria-checked={checked}
-        >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${checked ? 'translate-x-6' : 'translate-x-1'
-                }`} />
-        </button>
-    );
-}
-
-// ─────────────────────────────────────────────
-// PRIORITY SELECTOR
-// ─────────────────────────────────────────────
-
-function PrioritySelector({ value, onChange }: { value: Priority; onChange: (p: Priority) => void }) {
-    return (
-        <div className="flex gap-1.5">
-            {(Object.entries(PRIORITY_CONFIG) as [Priority, typeof PRIORITY_CONFIG[Priority]][]).map(([p, cfg]) => (
-                <button
-                    key={p}
-                    type="button"
-                    onClick={() => onChange(p)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${value === p
-                            ? cfg.activeClass
-                            : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
-                        }`}
-                >
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${value === p ? cfg.dotClass : 'bg-gray-300'}`} />
-                    {cfg.label}
-                </button>
-            ))}
-        </div>
-    );
-}
 
 // ─────────────────────────────────────────────
 // TASK CARD
@@ -148,15 +113,13 @@ function TaskCard({
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     };
 
-    const priorityDotClass = cfg.dotClass;
-
     return (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden animate-in slide-in-from-left-4 duration-300 group">
             {/* Header */}
-            <div className="flex items-center gap-2.5 px-4 py-3 bg-gray-50 border-b border-gray-200">
-                {/* Drag dots */}
-                <div className="flex flex-col gap-0.5 cursor-grab text-gray-300 flex-shrink-0">
-                    {[0, 1, 2].map(i => (
+            <div className="flex items-center gap-3.5 px-5 py-4 bg-white/50 border-b border-gray-50 group-hover:bg-primary-50/10 transition-colors">
+                {/* Drag dots placeholder */}
+                <div className="flex flex-col gap-0.5 cursor-grab text-gray-200 flex-shrink-0">
+                    {[0, 1].map(i => (
                         <div key={i} className="flex gap-0.5">
                             <div className="w-1 h-1 rounded-full bg-current" />
                             <div className="w-1 h-1 rounded-full bg-current" />
@@ -164,149 +127,172 @@ function TaskCard({
                     ))}
                 </div>
 
-                {/* Priority dot */}
-                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${priorityDotClass}`} />
+                {/* Status Indicator */}
+                <div className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0 animate-pulse", cfg.dotClass)} />
 
                 {/* Title */}
-                <span className="flex-1 text-sm font-medium text-gray-700 truncate">
-                    {item.title || `Aufgabe ${index + 1}`}
+                <span className="flex-1 text-sm font-bold text-gray-900 tracking-tight leading-none truncate">
+                    {item.title || `Vorgang ${index + 1}`}
                 </span>
 
                 {/* Move up/down */}
-                <div className="flex gap-0.5">
-                    <button type="button" onClick={onMoveUp} disabled={index === 0}
-                        className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-25 disabled:cursor-not-allowed rounded">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
-                        </svg>
-                    </button>
-                    <button type="button" onClick={onMoveDown} disabled={index === total - 1}
-                        className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-25 disabled:cursor-not-allowed rounded">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                        </svg>
-                    </button>
+                <div className="flex gap-1.5 opacity-40 hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="sm" onClick={onMoveUp} disabled={index === 0}
+                        className="h-8 w-8 p-0 rounded-lg border border-gray-100 bg-white shadow-xs">
+                        <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={onMoveDown} disabled={index === total - 1}
+                        className="h-8 w-8 p-0 rounded-lg border border-gray-100 bg-white shadow-xs">
+                        <ChevronDown className="h-4 w-4" />
+                    </Button>
                 </div>
 
                 {/* Expand */}
-                <button type="button" onClick={() => setExpanded(!expanded)}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded">
-                    <svg className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                </button>
+                <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)}
+                    className="h-8 w-8 p-0 rounded-lg border border-gray-100 bg-white shadow-xs">
+                    <ChevronDown className={cn("h-4 w-4 transition-transform duration-300", expanded ? "rotate-180" : "")} />
+                </Button>
 
                 {/* Remove */}
-                <button type="button" onClick={onRemove}
-                    className="p-1 text-gray-400 hover:text-red-500 transition-colors rounded">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
+                <Button variant="ghost" size="sm" onClick={onRemove}
+                    className="h-8 w-8 p-0 rounded-lg text-rose-300 hover:text-rose-600 hover:bg-rose-50 border border-gray-100 bg-white shadow-xs">
+                    <Trash2 className="h-4 w-4" />
+                </Button>
             </div>
 
             {/* Body */}
             {expanded && (
-                <div className="p-4 space-y-3">
+                <div className="p-6 space-y-6">
                     {/* Title input */}
-                    <input
-                        type="text"
-                        value={item.title}
-                        onChange={(e) => onUpdate({ title: e.target.value })}
-                        placeholder="Titel der Aufgabe *"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
-                    />
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Bezeichnung des Vorgangs *</label>
+                        <input
+                            type="text"
+                            value={item.title}
+                            onChange={(e) => onUpdate({ title: e.target.value })}
+                            placeholder="z.B. Monatliche Abrechnung abschließen"
+                            className="w-full h-11 px-4 py-3 border border-gray-100 rounded-xl bg-white font-bold text-gray-700 shadow-sm focus:border-primary-500 transition-all outline-none"
+                        />
+                    </div>
 
-                    {/* Priority + Due Date */}
-                    <div className="flex flex-wrap items-end gap-4">
-                        <div>
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Priorität</label>
-                            <PrioritySelector value={item.priority} onChange={(p) => onUpdate({ priority: p, isUrgent: p === 'high' })} />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Priority Selector */}
+                        <div className="space-y-3">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Priorität</label>
+                            <div className="flex gap-2">
+                                {(Object.entries(PRIORITY_CONFIG) as [Priority, typeof PRIORITY_CONFIG[Priority]][]).map(([p, pCfg]) => (
+                                    <button
+                                        key={p}
+                                        type="button"
+                                        onClick={() => onUpdate({ priority: p, isUrgent: p === 'high' })}
+                                        className={cn(
+                                            "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-tight border shadow-xs transition-all",
+                                            item.priority === p 
+                                                ? pCfg.activeClass 
+                                                : "bg-white border-gray-100 text-gray-400 hover:border-gray-200"
+                                        )}
+                                    >
+                                        <div className={cn("w-1.5 h-1.5 rounded-full", item.priority === p ? pCfg.dotClass : "bg-gray-200")} />
+                                        {pCfg.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Fällig bis</label>
-                            <input
-                                type="date"
-                                value={item.dueDate || ''}
-                                onChange={(e) => onUpdate({ dueDate: e.target.value || undefined })}
-                                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
+
+                        {/* Due Date */}
+                        <div className="space-y-3">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Fällig bis (optional)</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300" />
+                                <input
+                                    type="date"
+                                    value={item.dueDate || ''}
+                                    onChange={(e) => onUpdate({ dueDate: e.target.value || undefined })}
+                                    className="w-full h-11 pl-10 pr-4 py-3 border border-gray-100 rounded-xl bg-white font-bold text-gray-700 shadow-sm focus:border-primary-500 transition-all outline-none"
+                                />
+                            </div>
                         </div>
                     </div>
 
                     {/* Description */}
-                    <textarea
-                        value={item.description}
-                        onChange={(e) => onUpdate({ description: e.target.value })}
-                        placeholder="Beschreibung, Details, Hinweise..."
-                        rows={2}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                    />
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Detaillierte Anweisungen</label>
+                        <textarea
+                            value={item.description}
+                            onChange={(e) => onUpdate({ description: e.target.value })}
+                            placeholder="Beschreiben Sie hier genau, was zu tun ist..."
+                            rows={3}
+                            className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-white font-bold text-gray-700 shadow-sm focus:border-primary-500 transition-all outline-none resize-none"
+                        />
+                    </div>
 
                     {/* Links */}
-                    {item.links.map((link, idx) => (
-                        <div key={idx} className="flex gap-2 items-center">
-                            <input
-                                type="text"
-                                value={link.title}
-                                onChange={(e) => {
-                                    const updated = [...item.links];
-                                    updated[idx] = { ...updated[idx], title: e.target.value };
-                                    onUpdate({ links: updated });
-                                }}
-                                placeholder="Link-Titel"
-                                className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <input
-                                type="url"
-                                value={link.url}
-                                onChange={(e) => {
-                                    const updated = [...item.links];
-                                    updated[idx] = { ...updated[idx], url: e.target.value };
-                                    onUpdate({ links: updated });
-                                }}
-                                placeholder="https://..."
-                                className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <button type="button" onClick={() => onUpdate({ links: item.links.filter((_, i) => i !== idx) })}
-                                className="p-1 text-gray-400 hover:text-red-500 transition-colors">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 flex items-center gap-2">
+                            <LinkIcon className="h-3 w-3" /> Verknüpfungen
+                        </label>
+                        <div className="space-y-2">
+                            {item.links.map((link, idx) => (
+                                <div key={idx} className="flex gap-2 items-center group/link">
+                                    <input
+                                        type="text"
+                                        value={link.title}
+                                        onChange={(e) => {
+                                            const updated = [...item.links];
+                                            updated[idx] = { ...updated[idx], title: e.target.value };
+                                            onUpdate({ links: updated });
+                                        }}
+                                        placeholder="Titel (z.B. Wiki)"
+                                        className="flex-[0.4] h-10 px-3 border border-gray-100 rounded-lg text-xs font-bold focus:border-primary-500 outline-none"
+                                    />
+                                    <input
+                                        type="url"
+                                        value={link.url}
+                                        onChange={(e) => {
+                                            const updated = [...item.links];
+                                            updated[idx] = { ...updated[idx], url: e.target.value };
+                                            onUpdate({ links: updated });
+                                        }}
+                                        placeholder="https://..."
+                                        className="flex-1 h-10 px-3 border border-gray-100 rounded-lg text-xs font-bold focus:border-primary-500 outline-none"
+                                    />
+                                    <Button variant="ghost" size="sm" onClick={() => onUpdate({ links: item.links.filter((_, i) => i !== idx) })}
+                                        className="h-8 w-8 p-0 text-gray-300 hover:text-rose-500">
+                                        <XCircle className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                            <button type="button"
+                                onClick={() => onUpdate({ links: [...item.links, { title: '', url: '' }] })}
+                                className="text-[10px] font-black text-primary-600 uppercase tracking-widest hover:text-primary-700 flex items-center gap-1.5 group">
+                                <Plus className="h-3 w-3 group-hover:scale-110 transition-transform" /> Link hinzufügen
                             </button>
                         </div>
-                    ))}
+                    </div>
 
                     {/* Attachments */}
-                    {item.attachments.map((att, idx) => (
-                        <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200 text-sm">
-                            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                            <span className="flex-1 text-gray-700 truncate">{att.name}</span>
-                            <span className="text-xs text-gray-400">{formatSize(att.size)}</span>
-                            <button type="button" onClick={() => onUpdate({ attachments: item.attachments.filter((_, i) => i !== idx) })}
-                                className="text-gray-400 hover:text-red-500">
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
+                    <div className="space-y-3 pt-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 flex items-center gap-2">
+                            <Paperclip className="h-3 w-3" /> Anhänge
+                        </label>
+                        <div className="flex flex-wrap gap-3">
+                            {item.attachments.map((att, idx) => (
+                                <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50/50 border border-gray-100 rounded-xl text-[10px] font-bold">
+                                    <span className="text-gray-900 truncate max-w-[120px]">{att.name}</span>
+                                    <span className="text-gray-400 tabular-nums">{formatSize(att.size)}</span>
+                                    <button type="button" onClick={() => onUpdate({ attachments: item.attachments.filter((_, i) => i !== idx) })}
+                                        className="text-gray-300 hover:text-rose-500 ml-1">
+                                        <Trash2 className="h-3 w-3" />
+                                    </button>
+                                </div>
+                            ))}
+                            <button type="button" onClick={() => fileInputRef.current?.click()}
+                                className="px-3 py-1.5 border border-dashed border-gray-200 rounded-xl text-[10px] font-black text-gray-400 uppercase tracking-widest hover:border-primary-200 hover:text-primary-600 hover:bg-primary-50/10 transition-all flex items-center gap-1.5">
+                                <Plus className="h-3 w-3" /> Datei wählen
                             </button>
+                            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange}
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.png,.jpg,.jpeg" />
                         </div>
-                    ))}
-
-                    {/* Actions row */}
-                    <div className="flex gap-4 pt-0.5">
-                        <button type="button"
-                            onClick={() => onUpdate({ links: [...item.links, { title: '', url: '' }] })}
-                            className="text-xs text-gray-500 hover:text-gray-800 font-medium transition-colors underline-offset-2 hover:underline">
-                            Link hinzufügen
-                        </button>
-                        <button type="button" onClick={() => fileInputRef.current?.click()}
-                            className="text-xs text-gray-500 hover:text-gray-800 font-medium transition-colors underline-offset-2 hover:underline">
-                            Anhang hinzufügen
-                        </button>
-                        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange}
-                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.png,.jpg,.jpeg" />
                     </div>
                 </div>
             )}
@@ -352,131 +338,184 @@ export default function HandoverSection({
     const validCount = items.filter(i => i.title.trim()).length;
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6 animate-in fade-in duration-500 delay-200">
 
-            {/* Toggle */}
-            <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200">
-                <div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-900">Übergabe erstellen</span>
-                        {recommendHandover && (
-                            <span className="text-xs text-blue-600 font-medium bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                                Empfohlen
-                            </span>
-                        )}
+            {/* Premium Toggle Header */}
+            <Card className={cn(
+                "p-6 flex items-center justify-between border-gray-100 shadow-sm transition-all duration-500",
+                enabled ? "bg-primary-50/5 border-primary-100" : "bg-white"
+            )}>
+                <div className="flex items-center gap-5">
+                    <div className={cn(
+                        "h-12 w-12 rounded-2xl flex items-center justify-center shadow-sm border transition-all duration-500",
+                        enabled ? "bg-primary-600 border-primary-500 text-white" : "bg-gray-50 border-gray-100 text-gray-400"
+                    )}>
+                        <ClipboardList className="h-6 w-6" />
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                        {enabled
-                            ? substituteName
-                                ? `Aufgaben & Hinweise für ${substituteName} hinterlassen`
-                                : 'Aufgaben & Hinweise für Ihre Vertretung hinterlassen'
-                            : 'Keine Übergabe — Vertretung erhält keine Aufgaben'}
-                    </p>
-                </div>
-                <ToggleSwitch checked={enabled} onChange={onToggle} />
-            </div>
-
-            {/* Content */}
-            {enabled && (
-                <div className="space-y-3">
-
-                    {/* Stats */}
-                    {validCount > 0 && (
-                        <div className="flex items-center gap-3 text-xs text-gray-500 px-1">
-                            <span><span className="font-semibold text-gray-700">{validCount}</span> Aufgabe{validCount !== 1 ? 'n' : ''}</span>
-                            {highCount > 0 && (
-                                <>
-                                    <span className="text-gray-300">·</span>
-                                    <span className="text-red-600 font-medium">{highCount} hohe Priorität</span>
-                                </>
-                            )}
-                            <span className="ml-auto text-gray-400">Reihenfolge per ↑↓ ändern</span>
+                    <div>
+                        <div className="flex items-center gap-2">
+                             <h3 className="text-base font-black text-gray-900 tracking-tight leading-none">Übergabe-Protokoll</h3>
+                             {recommendHandover && (
+                                <Badge className="bg-amber-50 text-amber-700 border-amber-100 font-black text-[9px] px-2 py-0.5 rounded-lg uppercase">
+                                    <Star className="h-2 w-2 mr-1 animate-pulse fill-current" /> Empfohlen
+                                </Badge>
+                             )}
                         </div>
-                    )}
+                        <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-widest">
+                            {enabled 
+                                ? (substituteName ? `Briefing für ${substituteName}` : "Anweisungen für die Vertretung")
+                                : "Keine Aufgaben hinterlegt"}
+                        </p>
+                    </div>
+                </div>
+                
+                {/* Custom Branded Toggle */}
+                <button 
+                  type="button" 
+                  onClick={() => onToggle(!enabled)}
+                  className={cn(
+                    "relative w-14 h-8 rounded-full transition-all duration-300 shadow-inner overflow-hidden",
+                    enabled ? "bg-primary-600" : "bg-gray-100"
+                  )}
+                >
+                  <div className={cn(
+                    "absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-xl transition-all duration-300 flex items-center justify-center",
+                    enabled ? "translate-x-6" : "translate-x-0"
+                  )}>
+                    <div className={cn("w-1.5 h-1.5 rounded-full", enabled ? "bg-primary-600" : "bg-gray-200")} />
+                  </div>
+                </button>
+            </Card>
 
-                    {/* Task Cards */}
-                    {items.map((item, index) => (
-                        <TaskCard
-                            key={item.id}
-                            item={item}
-                            index={index}
-                            total={items.length}
-                            onUpdate={(updates) => updateItem(item.id, updates)}
-                            onRemove={() => removeItem(item.id)}
-                            onMoveUp={() => moveItem(index, 'up')}
-                            onMoveDown={() => moveItem(index, 'down')}
-                        />
-                    ))}
+            {/* Full Handover Wizard Content */}
+            {enabled && (
+                <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-500">
+                    
+                    {/* Tasks Container */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between px-2">
+                            <div className="flex items-center gap-2.5">
+                                <Sparkles className="h-4 w-4 text-primary-500" />
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Offene Aufgaben ({validCount})</span>
+                            </div>
+                            {highCount > 0 && (
+                                <Badge variant="danger" className="font-black text-[8px] tracking-widest border-none">
+                                    {highCount} KRITISCH
+                                </Badge>
+                            )}
+                        </div>
 
-                    {/* Add Task */}
-                    <button type="button" onClick={addItem}
-                        className="w-full py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all flex items-center justify-center gap-1.5">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Aufgabe hinzufügen
-                    </button>
+                        {items.map((item, index) => (
+                            <TaskCard
+                                key={item.id}
+                                item={item}
+                                index={index}
+                                total={items.length}
+                                onUpdate={(updates) => updateItem(item.id, updates)}
+                                onRemove={() => removeItem(item.id)}
+                                onMoveUp={() => moveItem(index, 'up')}
+                                onMoveDown={() => moveItem(index, 'down')}
+                            />
+                        ))}
 
-                    {/* General Notes */}
-                    <div className="p-4 bg-white rounded-xl border border-gray-200">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Allgemeine Hinweise</label>
+                        <Button 
+                            variant="ghost" 
+                            onClick={addItem}
+                            className="w-full h-14 border-2 border-dashed border-gray-100 hover:border-primary-200 hover:bg-primary-50/10 hover:text-primary-700 text-gray-400 rounded-2xl flex items-center justify-center gap-2.5 font-black uppercase tracking-widest text-[10px] transition-all group"
+                        >
+                            <Plus className="h-4 w-4 group-hover:scale-125 transition-transform" /> 
+                            Aufgabe hinzufügen
+                        </Button>
+                    </div>
+
+                    {/* General Notes Section */}
+                    <Card className="p-8 border-gray-100 shadow-sm bg-gray-50/30">
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="p-3 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                                <MessageSquare className="h-6 w-6 text-primary-500" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest">Allgemeine Hinweise</h4>
+                                <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-tight">Übergreifendes Briefing & Kontext</p>
+                            </div>
+                        </div>
                         <textarea
                             value={generalNotes}
                             onChange={(e) => onGeneralNotesChange(e.target.value)}
-                            rows={3}
-                            placeholder="Laufende Projekte, wichtige Kontakte, allgemeine Informationen..."
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                            rows={4}
+                            placeholder="Projekte, Kontakte, Besonderheiten..."
+                            className="w-full px-5 py-4 border border-gray-100 rounded-2xl bg-white font-bold text-gray-700 shadow-sm focus:border-primary-500 transition-all outline-none resize-none"
                         />
-                    </div>
+                    </Card>
 
-                    {/* Emergency Contact */}
-                    <div className="p-4 bg-white rounded-xl border border-gray-200">
-                        <label className="block text-sm font-semibold text-gray-700 mb-3">Erreichbarkeit während der Abwesenheit</label>
-                        <div className="space-y-2">
-                            {([
-                                { value: 'unavailable', label: 'Nicht erreichbar', desc: 'Keine Kontaktaufnahme' },
-                                { value: 'emergency_only', label: 'Nur echte Notfälle', desc: 'Nur bei kritischen Problemen' },
-                                { value: 'limited_email', label: 'Eingeschränkt per E-Mail', desc: 'Gelegentlich E-Mails lesen' },
-                            ] as const).map((opt) => (
-                                <label key={opt.value}
-                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer border transition-all ${emergencyContact.availability === opt.value
-                                            ? 'border-blue-300 bg-blue-50'
-                                            : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                                        }`}>
-                                    <input type="radio" name="availability" value={opt.value}
-                                        checked={emergencyContact.availability === opt.value}
-                                        onChange={() => onEmergencyContactChange({ ...emergencyContact, availability: opt.value })}
-                                        className="w-4 h-4 text-blue-600" />
-                                    <div>
-                                        <div className="text-sm font-medium text-gray-800">{opt.label}</div>
-                                        <div className="text-xs text-gray-500">{opt.desc}</div>
+                    {/* Emergency Contact Section */}
+                    <Card className="p-8 border-gray-100 shadow-sm bg-gray-50/30">
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="p-3 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                                <Phone className="h-6 w-6 text-primary-500" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest">Erreichbarkeit</h4>
+                                <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-tight">Verhalten im Notfall während der Abwesenheit</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            {(['unavailable', 'emergency_only', 'limited_email'] as const).map((opt) => (
+                                <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => onEmergencyContactChange({ ...emergencyContact, availability: opt })}
+                                    className={cn(
+                                        "flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all group",
+                                        emergencyContact.availability === opt 
+                                            ? "bg-primary-600 border-primary-500 text-white shadow-lg scale-105" 
+                                            : "bg-white border-gray-50 text-gray-400 hover:border-gray-100 hover:bg-gray-50"
+                                    )}
+                                >
+                                    <div className={cn(
+                                        "p-2 rounded-xl mb-3",
+                                        emergencyContact.availability === opt ? "bg-white/20" : "bg-gray-50 group-hover:bg-white"
+                                    )}>
+                                        {opt === 'unavailable' ? <XCircle className="h-5 w-5" /> : 
+                                         opt === 'emergency_only' ? <AlertTriangle className="h-5 w-5" /> : 
+                                         <Calendar className="h-5 w-5" />}
                                     </div>
-                                </label>
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{
+                                        opt === 'unavailable' ? 'Kein Kontakt' : 
+                                        opt === 'emergency_only' ? 'Nur Notfall' : 'Eingeschränkt'
+                                    }</span>
+                                </button>
                             ))}
                         </div>
 
-                        {emergencyContact.availability === 'emergency_only' && (
-                            <div className="mt-3 space-y-2">
-                                <input type="tel" value={emergencyContact.phone || ''}
-                                    onChange={(e) => onEmergencyContactChange({ ...emergencyContact, phone: e.target.value })}
-                                    placeholder="Telefonnummer für Notfälle *"
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                <input type="text" value={emergencyContact.note || ''}
-                                    onChange={(e) => onEmergencyContactChange({ ...emergencyContact, note: e.target.value })}
-                                    placeholder="Zusätzliche Hinweise (optional)"
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        {emergencyContact.availability !== 'unavailable' && (
+                            <div className="space-y-4 animate-in zoom-in-95 duration-300">
+                                <div className="space-y-2">
+                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                                        {emergencyContact.availability === 'emergency_only' ? 'Notfallnummer *' : 'Optionale Info'}
+                                     </label>
+                                     <input 
+                                        type="tel" 
+                                        value={emergencyContact.phone || ''}
+                                        onChange={(e) => onEmergencyContactChange({ ...emergencyContact, phone: e.target.value })}
+                                        placeholder={emergencyContact.availability === 'emergency_only' ? "+49 123..." : "Zusatzinfo..."}
+                                        className="w-full h-11 px-4 border border-gray-100 rounded-xl bg-white font-bold text-gray-700 shadow-sm focus:border-primary-500 transition-all outline-none"
+                                     />
+                                </div>
+                                <div className="space-y-2">
+                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Hinweis zur Erreichbarkeit</label>
+                                     <input 
+                                        type="text" 
+                                        value={emergencyContact.note || ''}
+                                        onChange={(e) => onEmergencyContactChange({ ...emergencyContact, note: e.target.value })}
+                                        placeholder="z.B. Nur per Teams oder Handy erreichbar"
+                                        className="w-full h-11 px-4 border border-gray-100 rounded-xl bg-white font-bold text-gray-700 shadow-sm focus:border-primary-500 transition-all outline-none"
+                                     />
+                                </div>
                             </div>
                         )}
-                        {emergencyContact.availability === 'limited_email' && (
-                            <div className="mt-3">
-                                <input type="text" value={emergencyContact.note || ''}
-                                    onChange={(e) => onEmergencyContactChange({ ...emergencyContact, note: e.target.value })}
-                                    placeholder="z.B. Antworte innerhalb von 48h (optional)"
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                        )}
-                    </div>
-
+                    </Card>
                 </div>
             )}
         </div>

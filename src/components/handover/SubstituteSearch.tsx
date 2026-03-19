@@ -1,6 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Search, X, Check, Users, MapPin, Briefcase } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Avatar } from '@/components/ui/avatar';
+import Badge from '@/components/ui/Badge';
+import Input from '@/components/ui/Input';
 
 interface TeamMember {
     userId: string;
@@ -96,16 +101,17 @@ export default function SubstituteSearch({ onSelect, selectedEmail, disabled }: 
     };
 
     return (
-        <div ref={wrapperRef} className="relative">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+        <div ref={wrapperRef} className="relative w-full">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 mb-2 block">
                 Vertretung (optional)
             </label>
 
-            <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+            <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Search className={cn(
+                        "w-4 h-4 transition-colors duration-200",
+                        selectedMember ? "text-emerald-500" : "text-gray-400 group-focus-within:text-primary-500"
+                    )} />
                 </div>
 
                 <input
@@ -119,73 +125,108 @@ export default function SubstituteSearch({ onSelect, selectedEmail, disabled }: 
                     onFocus={() => setIsOpen(true)}
                     placeholder="Name oder E-Mail suchen..."
                     disabled={disabled}
-                    className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${selectedMember
-                        ? 'border-green-300 bg-green-50'
-                        : 'border-gray-300 bg-white'
-                        } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={cn(
+                        "w-full h-12 pl-11 pr-11 text-sm font-bold rounded-2xl border bg-white ring-offset-white transition-all duration-200 outline-none",
+                        selectedMember 
+                            ? "border-emerald-100 bg-emerald-50/30 text-emerald-900" 
+                            : "border-gray-100 text-gray-700 placeholder:text-gray-300 placeholder:font-medium focus:border-primary-200 focus:ring-4 focus:ring-primary-50/50 focus:bg-white",
+                        disabled && "opacity-50 cursor-not-allowed bg-gray-50"
+                    )}
                 />
 
                 {selectedMember && (
                     <button
                         type="button"
                         onClick={handleClear}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-emerald-500 hover:text-emerald-700 transition-colors"
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <X className="w-4 h-4" />
                     </button>
+                )}
+                
+                {!selectedMember && loading && (
+                    <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
+                        <div className="w-4 h-4 border-2 border-primary-500/20 border-t-primary-500 rounded-full animate-spin" />
+                    </div>
                 )}
             </div>
 
             {/* Selected indicator */}
             {selectedMember && (
-                <div className="mt-2 flex items-center gap-2 text-sm text-green-700">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>{selectedMember.name}</span>
-                    {selectedMember.department && (
-                        <span className="text-green-600">· {selectedMember.department}</span>
-                    )}
+                <div className="mt-3 flex items-center gap-2.5 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl animate-in zoom-in-95 duration-200">
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="text-xs font-black text-emerald-700 uppercase tracking-tight">Bestätigt</span>
+                    <span className="text-xs font-bold text-emerald-900 truncate flex-1">{selectedMember.name}</span>
                 </div>
             )}
 
             {/* Dropdown */}
             {isOpen && !selectedMember && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                    {loading ? (
-                        <div className="p-4 text-center text-gray-500 text-sm">
-                            Laden...
+                <div className="absolute z-50 w-full mt-2 bg-white/95 backdrop-blur-md border border-gray-100 rounded-2xl shadow-2xl shadow-gray-200/50 max-h-72 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="p-3 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            {results.length} Teammitglieder gefunden
+                        </span>
+                        <Users className="h-3 w-3 text-gray-300" />
+                    </div>
+                    
+                    <div className="overflow-y-auto custom-scrollbar flex-1">
+                    {loading && results.length === 0 ? (
+                        <div className="p-8 text-center">
+                           <div className="w-8 h-8 border-2 border-primary-100 border-t-primary-600 rounded-full animate-spin mx-auto mb-3" />
+                           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Suche läuft...</p>
                         </div>
                     ) : results.length === 0 ? (
-                        <div className="p-4 text-center text-gray-500 text-sm">
-                            Keine Ergebnisse gefunden
+                        <div className="p-8 text-center">
+                            <Search className="h-8 w-8 text-gray-100 mx-auto mb-3" />
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Keine Übereinstimmung</p>
                         </div>
                     ) : (
-                        results.map((member) => (
+                        <div className="p-1.5 space-y-1">
+                        {results.map((member, idx) => (
                             <button
                                 key={member.userId}
                                 type="button"
                                 onClick={() => handleSelect(member)}
-                                className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-center gap-3 border-b border-gray-50 last:border-b-0"
+                                className={cn(
+                                    "group w-full text-left px-3 py-2.5 hover:bg-primary-50 rounded-xl transition-all flex items-center gap-3 animate-in fade-in slide-in-from-left-2 duration-300",
+                                    `delay-${idx * 20}`
+                                )}
                             >
-                                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-sm flex-shrink-0">
-                                    {member.name.charAt(0).toUpperCase()}
-                                </div>
+                                <Avatar 
+                                    name={member.name} 
+                                    className="h-9 w-9 text-xs border-2 border-white shadow-sm ring-1 ring-gray-100" 
+                                />
                                 <div className="min-w-0 flex-1">
-                                    <div className="font-medium text-gray-900 text-sm truncate">
+                                    <div className="font-bold text-gray-900 text-sm tracking-tight group-hover:text-primary-700 transition-colors">
                                         {member.name}
                                     </div>
-                                    <div className="text-xs text-gray-500 truncate">
-                                        {member.email}
-                                        {member.department && ` · ${member.department}`}
-                                        {member.jobTitle && ` · ${member.jobTitle}`}
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        <div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium truncate">
+                                            <Briefcase className="h-2.5 w-2.5" />
+                                            {member.jobTitle || 'Mitarbeiter'}
+                                        </div>
+                                        {member.department && (
+                                            <>
+                                                <span className="text-gray-200 text-[10px]">·</span>
+                                                <div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium truncate">
+                                                    <MapPin className="h-2.5 w-2.5" />
+                                                    {member.department}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="h-6 w-6 rounded-lg bg-white border border-primary-100 flex items-center justify-center">
+                                        <Check className="h-3 w-3 text-primary-600" />
                                     </div>
                                 </div>
                             </button>
-                        ))
+                        ))}
+                        </div>
                     )}
+                    </div>
                 </div>
             )}
         </div>

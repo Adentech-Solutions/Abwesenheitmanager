@@ -3,11 +3,14 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import Card from '@/components/ui/Card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Users, Calendar } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Users, Calendar, ArrowRight, CheckCircle2 } from 'lucide-react';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 export default function TeamOverview() {
   const { data: session } = useSession();
@@ -23,7 +26,6 @@ export default function TeamOverview() {
     queryFn: async () => {
       const response = await fetch('/api/calendar/team/today');
       if (!response.ok) {
-        // If endpoint doesn't exist yet, return empty data
         if (response.status === 404) return { absentToday: [], totalTeam: 0 };
         throw new Error('Failed to fetch team data');
       }
@@ -64,13 +66,15 @@ export default function TeamOverview() {
   if (isLoading) {
     return (
       <Card>
-        <Skeleton className="h-6 w-40 mb-2" />
-        <Skeleton className="h-4 w-56 mb-4" />
-        <div className="space-y-3">
+        <CardHeader className="pb-2">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-4 w-56 mt-2" />
+        </CardHeader>
+        <CardContent className="space-y-4">
           {[1, 2].map((i) => (
-            <Skeleton key={i} className="h-16 w-full" />
+            <Skeleton key={i} className="h-20 w-full rounded-xl" />
           ))}
-        </div>
+        </CardContent>
       </Card>
     );
   }
@@ -80,64 +84,79 @@ export default function TeamOverview() {
   const presentToday = totalTeam - absentToday.length;
 
   return (
-    <Card>
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+    <Card className="hover:shadow-md transition-all">
+      <CardHeader className="pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <CardTitle className="text-xl flex items-center gap-2">
               <Users className="h-5 w-5 text-primary-600" />
               Team-Übersicht
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">Wer ist heute abwesend?</p>
+            </CardTitle>
+            <p className="text-sm text-gray-500 font-medium">Wer ist heute abwesend?</p>
           </div>
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span className="text-gray-600">
-                {presentToday} Anwesend
-              </span>
+          <div className="flex items-center gap-4 text-[11px] font-bold uppercase tracking-wider">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100/50">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {presentToday} Anwesend
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-              <span className="text-gray-600">
-                {absentToday.length} Abwesend
-              </span>
+            <div className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-full border",
+              absentToday.length > 0 
+                ? "bg-amber-50 text-amber-700 border-amber-100/50" 
+                : "bg-gray-50 text-gray-500 border-gray-100"
+            )}>
+              <span className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                absentToday.length > 0 ? "bg-amber-500" : "bg-gray-300"
+              )} />
+              {absentToday.length} Abwesend
             </div>
           </div>
         </div>
+      </CardHeader>
 
-        {/* List */}
+      <CardContent className="space-y-6">
         {absentToday.length === 0 ? (
-          <div className="text-center py-8 text-gray-600">
-            <Users className="h-12 w-12 mx-auto mb-3 opacity-20" />
-            <p className="font-medium">Alle da! 🎉</p>
-            <p className="text-sm mt-1">Dein Team ist heute vollständig anwesend</p>
+          <div className="text-center py-12 px-6 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+            <div className="h-16 w-16 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-4 scale-in-center">
+              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+            </div>
+            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-tight">Vollzählig!</h4>
+            <p className="text-xs text-gray-500 mt-2 font-medium max-w-[200px] mx-auto leading-relaxed">
+              Dein gesamtes Team ist heute anwesend.
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {absentToday.map((absence: any) => (
+            {absentToday.map((absence: any, index: number) => (
               <div
                 key={absence.userId}
-                className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-white"
+                className={cn(
+                  "group flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-white hover:border-primary-100 hover:bg-primary-50/10 transition-all animate-in fade-in slide-in-from-right-4 duration-500 fill-mode-both",
+                  `delay-[${index * 100}ms]`
+                )}
               >
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarFallback className="bg-primary-100 text-primary-600">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-10 w-10 border-2 border-white shadow-sm transition-transform group-hover:scale-105">
+                    <AvatarFallback className="bg-primary-50 text-primary-700 font-bold text-xs">
                       {getInitials(absence.userName)}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium text-sm text-gray-900">{absence.userName}</p>
-                    <p className="text-xs text-gray-500">{absence.userEmail}</p>
+                    <p className="font-bold text-sm text-gray-900 leading-tight group-hover:text-primary-700 transition-colors">
+                      {absence.userName}
+                    </p>
+                    <p className="text-[11px] text-gray-500 font-medium mt-0.5">{absence.userEmail}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={getAbsenceTypeVariant(absence.type)}>
+                <div className="flex items-center gap-3">
+                  <Badge variant={getAbsenceTypeVariant(absence.type)} className="shadow-none font-bold uppercase text-[9px] tracking-widest px-2.5">
                     {getAbsenceTypeLabel(absence.type)}
                   </Badge>
-                  <div className="text-xs text-gray-500 text-right">
-                    <p>{absence.totalDays} {absence.totalDays === 1 ? 'Tag' : 'Tage'}</p>
+                  <div className="text-right h-8 flex flex-col justify-center">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                      {absence.totalDays} {absence.totalDays === 1 ? 'Tag' : 'Tage'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -145,19 +164,16 @@ export default function TeamOverview() {
           </div>
         )}
 
-        {/* Quick Action */}
         {totalTeam > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <a
-              href="/calendar"
-              className="flex items-center justify-center gap-2 text-sm text-primary-600 hover:text-primary-700 font-medium"
-            >
+          <Button asChild variant="ghost" className="w-full h-11 rounded-xl text-primary-600 hover:text-primary-700 hover:bg-primary-50 border border-transparent hover:border-primary-100 transition-all font-bold text-sm group">
+            <Link href="/calendar" className="flex items-center justify-center gap-2">
               <Calendar className="h-4 w-4" />
-              Vollständige Team-Übersicht anzeigen
-            </a>
-          </div>
+              Details im Team-Kalender
+              <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </Button>
         )}
-      </div>
+      </CardContent>
     </Card>
   );
 }

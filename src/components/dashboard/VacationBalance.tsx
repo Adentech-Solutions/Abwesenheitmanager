@@ -2,10 +2,11 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Card from '@/components/ui/Card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar } from 'lucide-react';
+import { cn } from "@/lib/utils"
+import { Calendar, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function VacationBalance() {
   const { data: stats, isLoading } = useQuery({
@@ -22,81 +23,97 @@ export default function VacationBalance() {
 
   if (isLoading) {
     return (
-      <Card>
-        <Skeleton className="h-6 w-32 mb-2" />
-        <Skeleton className="h-4 w-48 mb-4" />
-        <Skeleton className="h-4 w-full mb-4" />
-        <Skeleton className="h-20 w-full" />
+      <Card className="h-full">
+        <CardHeader>
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-48 mt-2" />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <Skeleton className="h-2 w-full" />
+          <div className="grid grid-cols-3 gap-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <div className="space-y-6">
-        {/* Header */}
+    <Card className="h-full">
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary-600" />
-              Urlaubskonto
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Dein Urlaubsanspruch für {new Date().getFullYear()}
-            </p>
-          </div>
+          <CardTitle className="text-xl flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary-600" />
+            Urlaubskonto
+          </CardTitle>
         </div>
-
+        <p className="text-sm text-gray-500 font-medium">
+          Dein Urlaubsanspruch für {new Date().getFullYear()}
+        </p>
+      </CardHeader>
+      
+      <CardContent className="space-y-6 pt-4">
         {/* Progress Bar */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">Verbraucht</span>
-            <span className="font-medium text-gray-900">
-              {vacationDays?.used || 0} / {vacationDays?.total || 0} Tage
+            <span className="text-gray-500 font-medium">Verbraucht</span>
+            <span className="font-bold text-gray-900">
+              {vacationDays?.used || 0} / {vacationDays?.total || 0} <span className="text-gray-400 font-normal ml-0.5">Tage</span>
             </span>
           </div>
-          <Progress value={100 - percentage} className="h-2" />
+          <Progress value={100 - percentage} className="h-2.5 bg-gray-100" />
         </div>
 
-        {/* Vacation Days Breakdown */}
-        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
-          <div className="space-y-1">
-            <p className="text-2xl font-bold text-green-600">
+        {/* Breakdown Grid */}
+        <div className="grid grid-cols-3 gap-4 py-6 border-y border-gray-100">
+          <div className="text-center space-y-1">
+            <p className="text-2xl font-bold text-emerald-600 leading-none">
               {vacationDays?.remaining || 0}
             </p>
-            <p className="text-xs text-gray-500">Verfügbar</p>
+            <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Verfügbar</p>
           </div>
-          <div className="space-y-1">
-            <p className="text-2xl font-bold text-orange-600">
+          <div className="text-center space-y-1 border-x border-gray-100 px-2">
+            <p className="text-2xl font-bold text-amber-600 leading-none">
               {vacationDays?.used || 0}
             </p>
-            <p className="text-xs text-gray-500">Genutzt</p>
+            <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Genutzt</p>
           </div>
-          <div className="space-y-1">
-            <p className="text-2xl font-bold text-blue-600">
+          <div className="text-center space-y-1">
+            <p className="text-2xl font-bold text-primary-600 leading-none">
               {vacationDays?.carryOver || 0}
             </p>
-            <p className="text-xs text-gray-500">Übertrag</p>
+            <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Übertrag</p>
           </div>
         </div>
 
-        {/* Info Box */}
-        {percentage < 30 && (
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-            <p className="text-sm text-orange-800">
-              ⚠️ Nur noch {vacationDays?.remaining || 0} Tage verfügbar! Plane deinen Urlaub rechtzeitig.
-            </p>
-          </div>
-        )}
-
-        {percentage > 70 && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-            <p className="text-sm text-green-800">
-              ✅ Du hast noch viele Urlaubstage übrig. Zeit für eine Auszeit!
-            </p>
-          </div>
-        )}
-      </div>
+        {/* Contextual Alerts */}
+        <div className="pt-2">
+          {percentage < 30 ? (
+            <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-3 flex gap-3 items-start animate-in fade-in zoom-in-95 duration-500">
+              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-800 leading-relaxed font-medium">
+                Nur noch {vacationDays?.remaining || 0} Tage verfügbar! Plane deinen Urlaub rechtzeitig.
+              </p>
+            </div>
+          ) : percentage > 70 ? (
+            <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 flex gap-3 items-start animate-in fade-in zoom-in-95 duration-500">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-emerald-800 leading-relaxed font-medium">
+                Du hast noch viele Urlaubstage übrig. Zeit für eine Auszeit!
+              </p>
+            </div>
+          ) : (
+            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 flex gap-3 items-start animate-in fade-in zoom-in-95 duration-500">
+              <Calendar className="h-5 w-5 text-primary-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-primary-800 leading-relaxed font-medium">
+                Dein Urlaubskonto ist gut ausgeglichen. Weiter so!
+              </p>
+            </div>
+          )}
+        </div>
+      </CardContent>
     </Card>
   );
 }

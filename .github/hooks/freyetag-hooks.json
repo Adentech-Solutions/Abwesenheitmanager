@@ -1,0 +1,45 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "type": "command",
+        "description": "Auto-format with Prettier after every file edit",
+        "command": "npx prettier --write \"$TOOL_INPUT_FILE_PATH\" 2>/dev/null || true",
+        "windows": "cmd /c npx prettier --write \"%TOOL_INPUT_FILE_PATH%\" 2>nul || exit /b 0",
+        "timeout": 10
+      },
+      {
+        "type": "command",
+        "description": "TypeScript check after every file edit — catches type errors immediately",
+        "command": "npx tsc --noEmit 2>&1 | head -20",
+        "windows": "cmd /c npx tsc --noEmit 2>&1",
+        "timeout": 30
+      },
+      {
+        "type": "command",
+        "description": "Security: Check if new/modified API routes have requireRole",
+        "command": "if echo \"$TOOL_INPUT_FILE_PATH\" | grep -q 'app/api.*route.ts'; then if ! grep -q 'requireRole\\|requirePermission' \"$TOOL_INPUT_FILE_PATH\"; then echo 'SECURITY WARNING: API route missing requireRole() or requirePermission()' >&2; exit 2; fi; fi",
+        "windows": "powershell -Command \"if ($env:TOOL_INPUT_FILE_PATH -match 'app[/\\\\]api.*route\\.ts') { if (-not (Select-String -Path $env:TOOL_INPUT_FILE_PATH -Pattern 'requireRole|requirePermission' -Quiet)) { Write-Error 'SECURITY WARNING: API route missing requireRole() or requirePermission()'; exit 2 } }\"",
+        "timeout": 5
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "description": "Block deletion of critical files",
+        "command": "if echo \"$TOOL_INPUT\" | grep -qE '(rbac\\.ts|auth\\.ts|middleware\\.ts|encryption\\.ts)' && echo \"$TOOL_NAME\" | grep -qi 'delete'; then echo 'BLOCKED: Cannot delete critical security files' >&2; exit 2; fi",
+        "windows": "powershell -Command \"if (($env:TOOL_INPUT -match '(rbac|auth|middleware|encryption)\\.ts') -and ($env:TOOL_NAME -match 'delete')) { Write-Error 'BLOCKED: Cannot delete critical security files'; exit 2 }\"",
+        "timeout": 5
+      }
+    ],
+    "AgentStop": [
+      {
+        "type": "command",
+        "description": "Final review: run tsc + security scan when agent finishes a task",
+        "command": "echo '=== FINAL REVIEW ===' && echo '--- TypeScript Check ---' && npx tsc --noEmit 2>&1 | tail -5 && echo '--- Unprotected Routes ---' && for f in $(find src/app/api -name 'route.ts' 2>/dev/null); do if ! grep -q 'requireRole\\|requirePermission' \"$f\"; then echo \"UNPROTECTED: $f\"; fi; done && echo '--- console.log Count ---' && grep -rn 'console\\.log' src/ --include='*.ts' --include='*.tsx' 2>/dev/null | grep -v node_modules | wc -l && echo '=== REVIEW COMPLETE ==='",
+        "windows": "cmd /c echo === FINAL REVIEW === && npx tsc --noEmit 2>&1 && echo === REVIEW COMPLETE ===",
+        "timeout": 60
+      }
+    ]
+  }
+}

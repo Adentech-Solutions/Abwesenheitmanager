@@ -7,10 +7,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import {
     Building2, MapPin, Calendar, Bell, Shield,
-    Save, CheckCircle2, ChevronRight,
+    Save, CheckCircle2, ChevronRight, Settings as SettingsIcon,
+    Info, InfoIcon
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // ─── German states ────────────────────────────────────────────────────────────
 const GERMAN_STATES = [
@@ -33,24 +38,28 @@ const GERMAN_STATES = [
 ];
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
-function Section({ icon: Icon, title, description, children }: {
+function Section({ icon: Icon, title, description, children, delay }: {
     icon: React.ElementType;
     title: string;
     description: string;
     children: React.ReactNode;
+    delay?: string;
 }) {
     return (
-        <Card>
-            <div className="flex items-start gap-4 mb-6">
-                <div className="p-2.5 bg-primary-50 rounded-lg shrink-0">
+        <Card className={cn(
+            "p-6 hover:shadow-md transition-all border-gray-100 animate-in fade-in slide-in-from-bottom-4 fill-mode-both",
+            delay
+        )}>
+            <div className="flex items-start gap-4 mb-8">
+                <div className="p-3 bg-primary-50 rounded-2xl shrink-0 shadow-sm border border-primary-100">
                     <Icon className="h-5 w-5 text-primary-600" />
                 </div>
                 <div>
-                    <h2 className="font-semibold text-gray-900">{title}</h2>
+                    <h2 className="text-lg font-bold text-gray-900 tracking-tight">{title}</h2>
                     <p className="text-sm text-gray-500 mt-0.5">{description}</p>
                 </div>
             </div>
-            <div className="space-y-5">{children}</div>
+            <div className="space-y-6">{children}</div>
         </Card>
     );
 }
@@ -58,43 +67,36 @@ function Section({ icon: Icon, title, description, children }: {
 // ─── Field components ─────────────────────────────────────────────────────────
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
     return (
-        <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-            <div className="sm:w-56 shrink-0">
-                <p className="text-sm font-medium text-gray-700">{label}</p>
-                {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4 group">
+            <div className="sm:w-64 shrink-0 pt-2 lg:pt-3">
+                <p className="text-sm font-bold text-gray-700 tracking-tight group-hover:text-primary-600 transition-colors uppercase text-[10px] tracking-widest">{label}</p>
+                {hint && <p className="text-xs text-gray-400 mt-1 leading-relaxed font-medium">{hint}</p>}
             </div>
             <div className="flex-1">{children}</div>
         </div>
     );
 }
 
-function Input({ value, onChange, type = 'text', min, max }: {
-    value: string | number; onChange: (v: any) => void; type?: string; min?: number; max?: number;
-}) {
+function Toggle({ checked, onChange, label, description }: { checked: boolean; onChange: (v: boolean) => void; label: string; description?: string }) {
     return (
-        <input
-            type={type}
-            value={value}
-            min={min}
-            max={max}
-            onChange={e => onChange(type === 'number' ? Number(e.target.value) : e.target.value)}
-            className="w-full sm:max-w-xs px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-        />
-    );
-}
-
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-    return (
-        <button
-            type="button"
-            onClick={() => onChange(!checked)}
-            className="flex items-center gap-3 group"
-        >
-            <div className={`relative w-10 h-6 rounded-full transition-colors duration-200 ${checked ? 'bg-primary-600' : 'bg-gray-200'}`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
+        <label className="flex items-start gap-4 cursor-pointer group select-none">
+            <div 
+                onClick={() => onChange(!checked)}
+                className={cn(
+                    "relative w-12 h-6.5 rounded-full transition-all duration-300 shadow-inner mt-0.5",
+                    checked ? 'bg-primary-600' : 'bg-gray-200'
+                )}
+            >
+                <div className={cn(
+                    "absolute top-1 w-4.5 h-4.5 rounded-full bg-white shadow-md transition-all duration-300 transform",
+                    checked ? 'translate-x-6' : 'translate-x-1'
+                )} />
             </div>
-            <span className="text-sm text-gray-700 group-hover:text-gray-900">{label}</span>
-        </button>
+            <div className="flex-1" onClick={() => onChange(!checked)}>
+                <span className="text-sm font-bold text-gray-700 group-hover:text-gray-900 transition-colors">{label}</span>
+                {description && <p className="text-xs text-gray-400 font-medium mt-0.5">{description}</p>}
+            </div>
+        </label>
     );
 }
 
@@ -178,8 +180,8 @@ export default function SettingsPage() {
     if (status === 'loading' || (status === 'authenticated' && userRole === undefined) || isLoading) {
         return (
             <DashboardLayout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+                <div className="h-[60vh] flex items-center justify-center">
+                    <LoadingSpinner text="Konfiguration wird geladen..." />
                 </div>
             </DashboardLayout>
         );
@@ -189,128 +191,221 @@ export default function SettingsPage() {
 
     return (
         <DashboardLayout>
-            <div className="max-w-3xl mx-auto space-y-6">
+            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
 
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Einstellungen</h1>
-                        <p className="text-gray-500 text-sm mt-1">Unternehmensweite Konfiguration</p>
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
+                            <SettingsIcon className="h-7 w-7 text-primary-600" />
+                            Einstellungen
+                        </h1>
+                        <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+                            Globale Systemsteuerung und Unternehmensvorgaben
+                        </p>
                     </div>
-                    <button
+                    <Button
+                        size="lg"
                         onClick={() => save()}
                         disabled={saving}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                        className="h-12 px-8 rounded-2xl bg-primary-600 hover:bg-primary-700 text-white font-bold shadow-lg shadow-primary-200 transition-all"
                     >
-                        {saving
-                            ? <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                            : <Save className="h-4 w-4" />
-                        }
-                        Speichern
-                    </button>
+                        {saving ? (
+                            <div className="w-5 h-5 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                        ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                        )}
+                        Einstellungen speichern
+                    </Button>
                 </div>
 
-                {/* 1 — Unternehmen */}
-                <Section icon={Building2} title="Unternehmen" description="Grundlegende Unternehmensangaben">
-                    <Field label="Firmenname">
-                        <Input value={form.companyName} onChange={v => set('companyName', v)} />
-                    </Field>
-                </Section>
-
-                {/* 2 — Standort & Feiertage */}
-                <Section icon={MapPin} title="Standort & Feiertage" description="Bundesland bestimmt die gesetzlichen Feiertage">
-                    <Field label="Bundesland" hint="Für Feiertagsberechnung">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-md">
-                            {GERMAN_STATES.map(state => (
-                                <button
-                                    key={state.code}
-                                    type="button"
-                                    onClick={() => set('state', state.code)}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${form.state === state.code
-                                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
-                                            : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    {form.state === state.code && <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
-                                    <span className="truncate">{state.name}</span>
-                                </button>
-                            ))}
-                        </div>
-                        {selectedState && (
-                            <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-                                <CheckCircle2 className="h-3 w-3 text-green-500" />
-                                Aktiv: {selectedState.name} ({selectedState.code})
-                            </p>
-                        )}
-                    </Field>
-                </Section>
-
-                {/* 3 — Urlaubsregelung */}
-                <Section icon={Calendar} title="Urlaubsregelung" description="Standard-Urlaubstage und Übertragungsregeln">
-                    <Field label="Urlaubstage pro Jahr" hint="Gilt für neue Mitarbeiter">
-                        <Input type="number" value={form.vacationDaysPerYear} onChange={v => set('vacationDaysPerYear', v)} min={20} max={40} />
-                    </Field>
-                    <Field label="Übertragbare Tage" hint="Max. Resturlaub ins Folgejahr">
-                        <Input type="number" value={form.carryOverDays} onChange={v => set('carryOverDays', v)} min={0} max={30} />
-                    </Field>
-                    <Field label="Max. gleichzeitige Abwesenheiten" hint="Pro Team/Abteilung">
-                        <Input type="number" value={form.maxConcurrentAbsences} onChange={v => set('maxConcurrentAbsences', v)} min={1} max={20} />
-                    </Field>
-                </Section>
-
-                {/* 4 — Genehmigungsworkflow */}
-                <Section icon={Shield} title="Genehmigungsworkflow" description="Wie werden Abwesenheitsanträge bearbeitet">
-                    <Field label="Genehmigung erforderlich">
-                        <Toggle
-                            checked={form.requireApproval}
-                            onChange={v => set('requireApproval', v)}
-                            label="Anträge müssen genehmigt werden"
-                        />
-                    </Field>
-                    {form.requireApproval && (
-                        <Field label="Auto-Genehmigung nach Tagen" hint="0 = deaktiviert">
-                            <Input
-                                type="number"
-                                value={form.autoApproveAfterDays}
-                                onChange={v => set('autoApproveAfterDays', v)}
-                                min={0}
-                                max={30}
+                <div className="space-y-6">
+                    {/* 1 — Unternehmen */}
+                    <Section 
+                        icon={Building2} 
+                        title="Unternehmen" 
+                        description="Identität Ihres Workspace in freyetag"
+                        delay="delay-0"
+                    >
+                        <Field label="Offizieller Firmenname" hint="Wird in Berichten und Teams-Bots verwendet">
+                            <Input 
+                                value={form.companyName} 
+                                onChange={e => set('companyName', e.target.value)} 
+                                className="max-w-md h-11 rounded-xl border-gray-100 bg-gray-50 shadow-inner focus:bg-white transition-all font-medium"
+                                placeholder="z.B. Adentech Solutions GmbH"
                             />
                         </Field>
-                    )}
-                </Section>
+                    </Section>
 
-                {/* 5 — Benachrichtigungen */}
-                <Section icon={Bell} title="Benachrichtigungen" description="Teams-Nachrichten und E-Mail-Benachrichtigungen">
-                    <Field label="Manager benachrichtigen">
-                        <Toggle
-                            checked={form.notifyManagerOnRequest}
-                            onChange={v => set('notifyManagerOnRequest', v)}
-                            label="Bei neuem Antrag per Teams benachrichtigen"
-                        />
-                    </Field>
-                    <Field label="Mitarbeiter benachrichtigen">
-                        <Toggle
-                            checked={form.notifyUserOnApproval}
-                            onChange={v => set('notifyUserOnApproval', v)}
-                            label="Bei Genehmigung/Ablehnung benachrichtigen"
-                        />
-                    </Field>
-                </Section>
+                    {/* 2 — Standort & Feiertage */}
+                    <Section 
+                        icon={MapPin} 
+                        title="Standort & Feiertage" 
+                        description="Regionale Kalendersteuerung und Feiertagsberechnung"
+                        delay="delay-75"
+                    >
+                        <Field label="Bundesland" hint="Wichtig für die korrekte Berechnung der Brutto-Arbeitstage">
+                            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 max-w-2xl">
+                                {GERMAN_STATES.map(state => {
+                                    const isSelected = form.state === state.code;
+                                    return (
+                                        <button
+                                            key={state.code}
+                                            type="button"
+                                            onClick={() => set('state', state.code)}
+                                            className={cn(
+                                                'flex items-center gap-2.5 px-4 py-3 rounded-xl border text-[13px] font-bold transition-all shadow-sm',
+                                                isSelected
+                                                    ? 'border-primary-500 bg-primary-50 text-primary-700 ring-2 ring-primary-500/10'
+                                                    : 'border-gray-100 bg-white text-gray-500 hover:border-primary-200 hover:bg-primary-50/30'
+                                            )}
+                                        >
+                                            <div className={cn(
+                                                "w-2 h-2 rounded-full shrink-0 transition-all",
+                                                isSelected ? "bg-primary-500 scale-125 shadow-sm shadow-primary-200" : "bg-gray-200"
+                                            )} />
+                                            <span className="truncate">{state.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {selectedState && (
+                                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-100">
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    Gesetzliche Feiertage für {selectedState.name} aktiviert
+                                </div>
+                            )}
+                        </Field>
+                    </Section>
 
-                {/* Save bottom */}
-                <div className="flex justify-end pb-8">
-                    <button
+                    {/* 3 — Urlaubsregelung */}
+                    <Section 
+                        icon={Calendar} 
+                        title="Urlaubsregelung" 
+                        description="Kontingente und Abwesenheits-Richtlinien"
+                        delay="delay-150"
+                    >
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <Field label="Jahresanspruch" hint="Basistage für neue Profile">
+                                <div className="flex items-center gap-3">
+                                    <Input 
+                                        type="number" 
+                                        value={form.vacationDaysPerYear} 
+                                        onChange={e => set('vacationDaysPerYear', Number(e.target.value))} 
+                                        min={20} 
+                                        max={45} 
+                                        className="w-24 h-11 text-center font-black text-lg bg-gray-50 border-gray-100 rounded-xl"
+                                    />
+                                    <span className="text-sm font-bold text-gray-400">Tage / Jahr</span>
+                                </div>
+                            </Field>
+                            <Field label="Übertragbarkeit" hint="Limit für Resturlaub-Mitnahme">
+                                <div className="flex items-center gap-3">
+                                    <Input 
+                                        type="number" 
+                                        value={form.carryOverDays} 
+                                        onChange={e => set('carryOverDays', Number(e.target.value))} 
+                                        min={0} 
+                                        max={20} 
+                                        className="w-24 h-11 text-center font-black text-lg bg-gray-50 border-gray-100 rounded-xl"
+                                    />
+                                    <span className="text-sm font-bold text-gray-400">Tage Limit</span>
+                                </div>
+                            </Field>
+                        </div>
+                        <div className="h-px bg-gray-50" />
+                        <Field label="Kapazitätslimit" hint="Maximale gleichzeitige Fälle pro Team">
+                            <div className="flex items-center gap-3">
+                                <Input 
+                                    type="number" 
+                                    value={form.maxConcurrentAbsences} 
+                                    onChange={e => set('maxConcurrentAbsences', Number(e.target.value))} 
+                                    min={1} 
+                                    max={50} 
+                                    className="w-24 h-11 text-center font-black text-lg bg-gray-50 border-gray-100 rounded-xl"
+                                />
+                                <span className="text-sm font-bold text-gray-400">MA pro Team</span>
+                            </div>
+                        </Field>
+                    </Section>
+
+                    {/* 4 — Genehmigungsworkflow */}
+                    <Section 
+                        icon={Shield} 
+                        title="Genehmigungsworkflow" 
+                        description="Governance und Freigabeprozesse"
+                        delay="delay-[225ms]"
+                    >
+                        <Field label="Genehmigungspflicht">
+                            <Toggle
+                                checked={form.requireApproval}
+                                onChange={v => set('requireApproval', v)}
+                                label="Approval Flow aktivieren"
+                                description="Abwesenheitsanträge müssen manuell vom Vorgesetzten freigegeben werden."
+                            />
+                        </Field>
+                        {form.requireApproval && (
+                            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 animate-in zoom-in-95 duration-300">
+                                <Field label="Auto-Freigabe" hint="Automatische Genehmigung nach Zeit">
+                                    <div className="flex items-center gap-3">
+                                        <Input
+                                            type="number"
+                                            value={form.autoApproveAfterDays}
+                                            onChange={e => set('autoApproveAfterDays', Number(e.target.value))}
+                                            min={0}
+                                            max={30}
+                                            className="w-24 h-11 text-center font-black text-lg bg-white border-amber-200 rounded-xl text-amber-700"
+                                        />
+                                        <span className="text-sm font-bold text-amber-600/60">Tage (0 = deaktiviert)</span>
+                                    </div>
+                                    <div className="mt-3 flex items-start gap-2 text-[11px] text-amber-600 font-medium">
+                                        <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                        <span>Anträge werden nach Ablauf dieser Frist automatisch genehmigt, falls der Vorgesetzte nicht reagiert.</span>
+                                    </div>
+                                </Field>
+                            </div>
+                        )}
+                    </Section>
+
+                    {/* 5 — Benachrichtigungen */}
+                    <Section 
+                        icon={Bell} 
+                        title="Benachrichtigungen" 
+                        description="Kommunikation via Microsoft Teams"
+                        delay="delay-300"
+                    >
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <Toggle
+                                checked={form.notifyManagerOnRequest}
+                                onChange={v => set('notifyManagerOnRequest', v)}
+                                label="Manager Alerts"
+                                description="Sofortige Teams-Meldung bei neuen Anträgen."
+                            />
+                            <Toggle
+                                checked={form.notifyUserOnApproval}
+                                onChange={v => set('notifyUserOnApproval', v)}
+                                label="User Feedback"
+                                description="Benachrichtigung bei Statusänderungen."
+                            />
+                        </div>
+                    </Section>
+                </div>
+
+                {/* Save bottom actions */}
+                <div className="flex justify-end pt-6 pb-12">
+                    <Button
+                        size="lg"
                         onClick={() => save()}
                         disabled={saving}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                        className="h-14 px-10 rounded-2xl bg-primary-600 hover:bg-primary-700 text-white font-bold shadow-xl shadow-primary-100 hover:shadow-primary-200 transition-all hover:-translate-y-0.5"
                     >
-                        {saving
-                            ? <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                            : <Save className="h-4 w-4" />
-                        }
-                        Einstellungen speichern
-                    </button>
+                        {saving ? (
+                            <div className="w-6 h-6 animate-spin rounded-full border-2 border-white border-t-transparent mr-3" />
+                        ) : (
+                            <Save className="h-5 w-5 mr-3" />
+                        )}
+                        Konfiguration anwenden
+                    </Button>
                 </div>
 
             </div>

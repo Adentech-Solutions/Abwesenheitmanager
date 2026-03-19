@@ -5,7 +5,7 @@ import * as AvatarPrimitive from "@radix-ui/react-avatar"
 
 import { cn } from "@/lib/utils"
 
-const Avatar = React.forwardRef<
+const AvatarRoot = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
 >(({ className, ...props }, ref) => (
@@ -18,7 +18,7 @@ const Avatar = React.forwardRef<
     {...props}
   />
 ))
-Avatar.displayName = AvatarPrimitive.Root.displayName
+AvatarRoot.displayName = AvatarPrimitive.Root.displayName
 
 const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
@@ -47,4 +47,35 @@ const AvatarFallback = React.forwardRef<
 ))
 AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
 
-export { Avatar, AvatarImage, AvatarFallback }
+// Convenient wrapper for naming-based initials
+interface AvatarProps extends React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root> {
+    name?: string;
+    src?: string;
+    fallback?: string;
+}
+
+const Avatar = React.forwardRef<React.ElementRef<typeof AvatarPrimitive.Root>, AvatarProps>(
+    ({ name, src, fallback, className, ...props }, ref) => {
+        const initials = name
+            ? name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .toUpperCase()
+                  .substring(0, 2)
+            : "?";
+
+        return (
+            <AvatarRoot ref={ref} className={className} {...props}>
+                {src && <AvatarImage src={src} />}
+                <AvatarFallback className="bg-primary-50 text-primary-700 font-black text-xs">
+                    {fallback || initials}
+                </AvatarFallback>
+            </AvatarRoot>
+        );
+    }
+);
+Avatar.displayName = "Avatar";
+
+export { Avatar, AvatarImage, AvatarFallback, AvatarRoot }
+export default Avatar

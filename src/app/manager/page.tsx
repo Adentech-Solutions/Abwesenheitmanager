@@ -5,14 +5,21 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { CheckCircle2, XCircle, Clock, Users, ChevronRight } from 'lucide-react';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import StatsCard from '@/components/shared/StatsCard';
+import LoadingSpinner from '@/components/shared/LoadingSpinner';
+import { CheckCircle2, XCircle, Clock, Users, ChevronRight, Calendar, Mail, FileText, Briefcase } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface Absence {
   _id: string;
   userId: string;
   userEmail: string;
   userName: string;
-  type: string;
+  type: 'vacation' | 'sick' | 'training' | 'parental' | string;
   startDate: string;
   endDate: string;
   totalDays: number;
@@ -20,6 +27,13 @@ interface Absence {
   reason?: string;
   createdAt: string;
 }
+
+const TYPE_CONFIG: Record<string, { label: string; variant: 'success' | 'warning' | 'danger' | 'info' | 'default'; icon: any }> = {
+  vacation: { label: 'Urlaub', variant: 'success', icon: Calendar },
+  sick: { label: 'Krankheit', variant: 'danger', icon: XCircle },
+  training: { label: 'Fortbildung', variant: 'info', icon: Briefcase },
+  parental: { label: 'Elternzeit', variant: 'warning', icon: Users },
+};
 
 export default function ManagerDashboard() {
   const { data: session, status } = useSession();
@@ -68,7 +82,6 @@ export default function ManagerDashboard() {
       });
 
       if (response.ok) {
-        // ✅ FIX: toast statt alert()
         if (action === 'approved') {
           toast.success('Antrag genehmigt');
         } else {
@@ -89,174 +102,211 @@ export default function ManagerDashboard() {
   const formatDate = (dateString: string) =>
     new Date(dateString).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  const formatAbsenceType = (type: string) =>
-    ({ vacation: 'Urlaub', sick: 'Krankheit', training: 'Fortbildung', parental: 'Elternzeit' }[type] || type);
-
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">Laden...</p>
+      <DashboardLayout>
+        <div className="h-[60vh] flex items-center justify-center">
+          <LoadingSpinner text="Manager Dashboard wird geladen..." />
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-
+      <div className="space-y-8 animate-in fade-in duration-500">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Manager Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-1">Willkommen zurück, {session?.user?.name || 'Manager'}</p>
+        <div className="flex justify-between items-end">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Manager Dashboard</h1>
+            <p className="text-sm text-gray-500 mt-1">Willkommen zurück, <span className="text-gray-900 font-semibold">{session?.user?.name || 'Manager'}</span></p>
+          </div>
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4">
-            <div className="p-3 bg-orange-50 rounded-lg">
-              <Clock className="h-5 w-5 text-orange-500" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <StatsCard 
+            title="Offene Anträge" 
+            value={pendingApprovals.length} 
+            icon={Clock} 
+            color="text-amber-600" 
+            bgColor="bg-amber-50"
+            delay="delay-0"
+          />
+          <StatsCard 
+            title="Team Mitglieder" 
+            value="—" 
+            icon={Users} 
+            color="text-primary-600" 
+            bgColor="bg-primary-50"
+            delay="delay-75"
+          />
+          <Card className="p-5 flex flex-col justify-center items-center bg-gray-50/50 border-dashed hover:bg-white transition-colors cursor-pointer group delay-150 animate-in fade-in slide-in-from-bottom-2 fill-mode-both" onClick={() => router.push('/manager/approvals')}>
+            <div className="p-3 bg-white rounded-xl shadow-sm group-hover:shadow-md transition-all mb-3 text-primary-600">
+              <ChevronRight className="h-6 w-6" />
             </div>
-            <div>
-              <p className="text-sm text-gray-500">Offene Anträge</p>
-              <p className="text-2xl font-bold text-orange-600">{pendingApprovals.length}</p>
-              <button
-                onClick={() => router.push('/manager/approvals')}
-                className="text-xs text-primary-600 hover:underline mt-0.5"
-              >
-                Alle ansehen →
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4">
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <Users className="h-5 w-5 text-blue-500" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Team Mitglieder</p>
-              <p className="text-2xl font-bold text-gray-900">—</p>
-            </div>
-          </div>
+            <p className="text-sm font-bold text-gray-900 tracking-tight">Alle Genehmigungen</p>
+            <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest mt-1">Verlauf ansehen</p>
+          </Card>
         </div>
-
-        {/* ✅ Statistiken-Card ENTFERNT — gehört in /analytics */}
 
         {/* Pending Approvals */}
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-900">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-900 tracking-tight flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-500" />
               Offene Genehmigungen
               {pendingApprovals.length > 0 && (
-                <span className="ml-2 text-xs bg-orange-100 text-orange-600 font-semibold px-2 py-0.5 rounded-full">
+                <Badge variant="warning" className="ml-2 px-2 py-0.5 font-bold">
                   {pendingApprovals.length}
-                </span>
+                </Badge>
               )}
             </h2>
-            {pendingApprovals.length > 3 && (
-              <button
-                onClick={() => router.push('/manager/approvals')}
-                className="text-sm text-primary-600 hover:underline"
-              >
-                Alle ansehen →
-              </button>
-            )}
           </div>
 
-          {pendingApprovals.length === 0 ? (
-            <div className="py-12 text-center">
-              <CheckCircle2 className="h-10 w-10 text-green-300 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">Keine offenen Anträge</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-50">
-              {pendingApprovals.slice(0, 5).map(absence => (
-                <div key={absence._id} className="flex items-center gap-4 px-5 py-4">
-                  <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-sm font-bold text-primary-700 shrink-0">
-                    {absence.userName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 text-sm truncate">{absence.userName}</p>
-                    <p className="text-xs text-gray-500 truncate">{absence.userEmail}</p>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                      <span className="font-medium text-gray-700">{formatAbsenceType(absence.type)}</span>
-                      <span>{formatDate(absence.startDate)} – {formatDate(absence.endDate)}</span>
-                      <span>{absence.totalDays} {absence.totalDays === 1 ? 'Tag' : 'Tage'}</span>
-                    </div>
-                    {absence.reason && (
-                      <p className="text-xs text-gray-400 italic mt-0.5 truncate">{absence.reason}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      onClick={() => handleQuickApproval(absence._id, 'approved')}
-                      disabled={processingId === absence._id}
-                      className="p-2 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg disabled:opacity-40 transition-colors"
-                      title="Genehmigen"
-                    >
-                      {processingId === absence._id
-                        ? <div className="w-4 h-4 animate-spin rounded-full border-2 border-green-400 border-t-transparent" />
-                        : <CheckCircle2 className="h-4 w-4" />
-                      }
-                    </button>
-                    <button
-                      onClick={() => handleQuickApproval(absence._id, 'rejected')}
-                      disabled={processingId === absence._id}
-                      className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg disabled:opacity-40 transition-colors"
-                      title="Ablehnen"
-                    >
-                      <XCircle className="h-4 w-4" />
-                    </button>
-                  </div>
+          <Card className="p-0 overflow-hidden hover:shadow-md transition-all">
+            {pendingApprovals.length === 0 ? (
+              <div className="py-16 text-center">
+                <div className="inline-flex p-4 bg-emerald-50 rounded-full mb-4">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-500" />
                 </div>
-              ))}
-            </div>
-          )}
+                <p className="text-gray-500 font-medium">Alle Anträge bearbeitet!</p>
+                <p className="text-xs text-gray-400 mt-1">Momentan gibt es keine offenen Genehmigungen.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {pendingApprovals.slice(0, 5).map((absence, idx) => {
+                  const type = TYPE_CONFIG[absence.type] || { label: absence.type, variant: 'default', icon: FileText };
+                  const TypeIcon = type.icon;
+                  return (
+                    <div 
+                      key={absence._id} 
+                      className={cn(
+                        "flex items-center gap-4 px-6 py-5 hover:bg-gray-50/80 transition-colors animate-in fade-in slide-in-from-right-4 fill-mode-both",
+                        `delay-[${idx * 50}ms]`
+                      )}
+                    >
+                      <Avatar className="h-12 w-12 border-2 border-white shadow-sm ring-1 ring-gray-100">
+                        <AvatarFallback className="bg-primary-50 text-primary-600 font-bold text-lg">
+                          {absence.userName.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-gray-900 tracking-tight truncate">{absence.userName}</p>
+                          <Badge variant={type.variant as any} className="gap-1 px-2 py-0 font-bold uppercase text-[9px] tracking-widest">
+                            {TypeIcon && <TypeIcon className="h-3 w-3" />}
+                            {type.label}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 font-medium">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {formatDate(absence.startDate)} – {formatDate(absence.endDate)}
+                          </span>
+                          <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">
+                            {absence.totalDays} {absence.totalDays === 1 ? 'Tag' : 'Tage'}
+                          </span>
+                        </div>
+                        {absence.reason && (
+                          <p className="text-xs text-gray-400 italic mt-1 flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            {absence.reason}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleQuickApproval(absence._id, 'approved')}
+                          disabled={processingId === absence._id}
+                          className="h-10 w-10 p-0 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                          title="Genehmigen"
+                        >
+                          {processingId === absence._id
+                            ? <LoadingSpinner size="sm" />
+                            : <CheckCircle2 className="h-5 w-5" />
+                          }
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleQuickApproval(absence._id, 'rejected')}
+                          disabled={processingId === absence._id}
+                          className="h-10 w-10 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                          title="Ablehnen"
+                        >
+                          <XCircle className="h-5 w-5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {pendingApprovals.length > 5 && (
+                  <div className="p-4 bg-gray-50/50 text-center">
+                    <Button 
+                      variant="link" 
+                      onClick={() => router.push('/manager/approvals')} 
+                      className="text-xs font-bold text-primary-600"
+                    >
+                      +{pendingApprovals.length - 5} weitere Genehmigungen anzeigen →
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
         </div>
 
-        {/* Schnellzugriff */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="font-semibold text-gray-900 mb-3">Schnellzugriff</h3>
-            <div className="space-y-2">
+        {/* Schnellzugriff & Tipps */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="p-6 hover:shadow-md transition-all">
+            <h3 className="font-bold text-gray-900 tracking-tight mb-4 flex items-center gap-2">
+              <ChevronRight className="h-4 w-4 text-primary-600" />
+              Schnellzugriff
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
-                { label: 'Alle Genehmigungen', href: '/manager/approvals' },
-                { label: 'Team Analytics', href: '/analytics' },
-                { label: 'Meine Abwesenheiten', href: '/absences' },
-              ].map(({ label, href }) => (
+                { label: 'Alle Genehmigungen', href: '/manager/approvals', icon: Calendar },
+                { label: 'Team Analytics', href: '/analytics', icon: Briefcase },
+                { label: 'Meine Abwesenheiten', href: '/absences', icon: Users },
+              ].map(({ label, href, icon: Icon }) => (
                 <button
                   key={href}
                   onClick={() => router.push(href)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+                  className="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-primary-50 hover:ring-1 hover:ring-primary-100 rounded-xl transition-all text-center group"
                 >
-                  <span className="font-medium text-gray-700">{label}</span>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                  <Icon className="h-5 w-5 text-gray-400 group-hover:text-primary-600 mb-2 transition-colors" />
+                  <span className="text-[11px] font-bold text-gray-700 tracking-tight">{label}</span>
                 </button>
               ))}
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="font-semibold text-gray-900 mb-3">Tipps & Hinweise</h3>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li className="flex items-start gap-2">
-                <span className="text-blue-400 mt-0.5">•</span>
-                Genehmigen Sie Anträge zeitnah, um Planungssicherheit zu schaffen.
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-400 mt-0.5">•</span>
-                Nutzen Sie Analytics, um Trends und Muster zu erkennen.
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-400 mt-0.5">•</span>
-                Prüfen Sie die Team-Kapazität vor Genehmigung längerer Abwesenheiten.
-              </li>
+          <Card className="p-6 hover:shadow-md transition-all bg-primary-900 text-white border-none shadow-lg">
+            <h3 className="font-bold tracking-tight mb-4 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-primary-400" />
+              Manager-Tipps
+            </h3>
+            <ul className="space-y-3">
+              {[
+                'Genehmigen Sie Anträge zeitnah für bessere Planungssicherheit.',
+                'Prüfen Sie Team-Kapazitäten in Analytics vor langen Abwesenheiten.',
+                'Sorgen Sie für eine faire Verteilung der Urlaubstage im Team.'
+              ].map((tip, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm text-primary-100">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-800 text-[10px] font-bold text-primary-400 shrink-0">
+                    {i + 1}
+                  </span>
+                  {tip}
+                </li>
+              ))}
             </ul>
-          </div>
+          </Card>
         </div>
-
       </div>
     </DashboardLayout>
   );

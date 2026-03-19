@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -12,9 +11,13 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import StatsCard from '@/components/shared/StatsCard';
+import LoadingSpinner from '@/components/shared/LoadingSpinner';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Calendar, Clock, CheckCircle2, XCircle, FileText, Plus,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface Absence {
   _id: string;
@@ -65,7 +68,7 @@ export default function AbsencesPage() {
   }[status] || status);
 
   const getStatusVariant = (status: string) => ({
-    approved: 'success', pending: 'warning', rejected: 'danger',
+    approved: 'success', pending: 'warning', rejected: 'danger', cancelled: 'outline'
   }[status] as any || 'default');
 
   const handleDelete = async (absenceId: string) => {
@@ -89,19 +92,20 @@ export default function AbsencesPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-
+      <div className="space-y-8 animate-in fade-in duration-500">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
               <Calendar className="h-6 w-6 text-primary-600" />
               Meine Abwesenheiten
             </h1>
-            <p className="text-gray-500 text-sm mt-1">Übersicht über alle deine Abwesenheitsanträge</p>
+            <p className="text-sm text-gray-500 mt-1">Übersicht über alle deine Abwesenheitsanträge</p>
           </div>
-          {/* ✅ FIX: Button navigiert korrekt */}
-          <Button onClick={() => router.push('/absences/new')}>
+          <Button 
+            onClick={() => router.push('/absences/new')}
+            className="shadow-sm hover:shadow transition-all"
+          >
             <Plus className="h-4 w-4 mr-2" />
             Neue Abwesenheit
           </Button>
@@ -109,43 +113,61 @@ export default function AbsencesPage() {
 
         {/* Stats */}
         <div className="grid gap-4 md:grid-cols-4">
-          {[
-            { label: 'Gesamt', value: stats.total, icon: FileText, color: 'text-gray-400' },
-            { label: 'Ausstehend', value: stats.pending, icon: Clock, color: 'text-orange-400' },
-            { label: 'Genehmigt', value: stats.approved, icon: CheckCircle2, color: 'text-green-400' },
-            { label: 'Abgelehnt', value: stats.rejected, icon: XCircle, color: 'text-red-400' },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <Card key={label}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">{label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{value}</p>
-                </div>
-                <Icon className={`h-8 w-8 ${color}`} />
-              </div>
-            </Card>
-          ))}
+          <StatsCard 
+            title="Gesamt" 
+            value={isLoading ? '-' : stats.total} 
+            icon={FileText} 
+            color="text-gray-500" 
+            bgColor="bg-gray-50"
+            delay="delay-0"
+          />
+          <StatsCard 
+            title="Ausstehend" 
+            value={isLoading ? '-' : stats.pending} 
+            icon={Clock} 
+            color="text-amber-600" 
+            bgColor="bg-amber-50"
+            delay="delay-75"
+          />
+          <StatsCard 
+            title="Genehmigt" 
+            value={isLoading ? '-' : stats.approved} 
+            icon={CheckCircle2} 
+            color="text-emerald-600" 
+            bgColor="bg-emerald-50"
+            delay="delay-150"
+          />
+          <StatsCard 
+            title="Abgelehnt" 
+            value={isLoading ? '-' : stats.rejected} 
+            icon={XCircle} 
+            color="text-rose-600" 
+            bgColor="bg-rose-50"
+            delay="delay-[225ms]"
+          />
         </div>
 
         {/* Filters */}
-        <Card>
+        <Card className="hover:shadow-md transition-all">
           <div className="flex flex-wrap gap-3 items-center">
             <div className="flex gap-1">
               {['all', 'pending', 'approved', 'rejected'].map(s => (
                 <button
                   key={s}
                   onClick={() => setSelectedStatus(s)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${selectedStatus === s
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
-                    }`}
+                  className={cn(
+                    "px-3 py-1.5 text-sm font-medium rounded-lg transition-all",
+                    selectedStatus === s
+                      ? "bg-primary-600 text-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-100"
+                  )}
                 >
                   {{ all: 'Alle', pending: 'Ausstehend', approved: 'Genehmigt', rejected: 'Abgelehnt' }[s]}
                 </button>
               ))}
             </div>
             <select
-              className="ml-auto text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-600"
+              className="ml-auto text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-600 focus:ring-2 focus:ring-primary-500 outline-none transition-all"
               value={selectedType}
               onChange={e => setSelectedType(e.target.value)}
             >
@@ -160,68 +182,80 @@ export default function AbsencesPage() {
 
         {/* List */}
         {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => (
-              <Card key={i}>
-                <div className="animate-pulse h-16 bg-gray-100 rounded" />
-              </Card>
-            ))}
+          <div className="py-12">
+            <LoadingSpinner text="Abwesenheiten werden geladen..." />
           </div>
         ) : absences.length === 0 ? (
-          <Card>
+          <Card className="hover:shadow-md transition-all">
             <div className="py-16 text-center">
-              <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-700">Keine Abwesenheiten</h3>
+              <Calendar className="h-12 w-12 text-gray-200 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Keine Abwesenheiten</h3>
               <p className="text-gray-500 text-sm mt-1 mb-6">Du hast noch keine Abwesenheiten beantragt</p>
-              {/* ✅ FIX: Auch dieser Button navigiert korrekt */}
-              <Button onClick={() => router.push('/absences/new')}>
+              <Button 
+                onClick={() => router.push('/absences/new')}
+                className="shadow-sm hover:shadow transition-all"
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Erste Abwesenheit beantragen
               </Button>
             </div>
           </Card>
         ) : (
-          <div className="space-y-3">
-            {absences.map(absence => (
-              <Card key={absence._id}>
+          <div className="space-y-4">
+            {absences.map((absence, idx) => (
+              <Card 
+                key={absence._id} 
+                className={cn(
+                  "hover:shadow-md hover:-translate-y-0.5 transition-all animate-in fade-in slide-in-from-bottom-2 fill-mode-both",
+                  `delay-[${idx * 50}ms]`
+                )}
+              >
                 <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 space-y-2">
+                  <div className="flex-1 space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-gray-900">{getAbsenceTypeLabel(absence.type)}</span>
                       <Badge variant={getStatusVariant(absence.status)}>
                         {getStatusLabel(absence.status)}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                      <Calendar className="h-3.5 w-3.5" />
-                      <span>
-                        {format(new Date(absence.startDate), 'dd. MMM yyyy', { locale: de })}
-                        {' → '}
-                        {format(new Date(absence.endDate), 'dd. MMM yyyy', { locale: de })}
-                      </span>
-                      <span className="text-gray-400">·</span>
-                      <span>{absence.totalDays} {absence.totalDays === 1 ? 'Tag' : 'Tage'}</span>
+                    <div className="flex items-center gap-3 text-sm text-gray-600">
+                      <div className="flex items-center gap-1.5 py-1 px-2 bg-gray-50 rounded-md">
+                        <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="font-medium">
+                          {format(new Date(absence.startDate), 'dd. MMM yyyy', { locale: de })}
+                          {' → '}
+                          {format(new Date(absence.endDate), 'dd. MMM yyyy', { locale: de })}
+                        </span>
+                      </div>
+                      <span className="text-gray-300">|</span>
+                      <div className="flex items-center gap-1.5 py-1 px-2 bg-gray-50 rounded-md">
+                        <Clock className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="font-medium">{absence.totalDays} {absence.totalDays === 1 ? 'Tag' : 'Tage'}</span>
+                      </div>
                     </div>
                     {absence.reason && (
-                      <p className="text-sm text-gray-600 italic">{absence.reason}</p>
+                      <p className="text-sm text-gray-600 bg-gray-50/50 p-2 rounded-lg italic border-l-2 border-gray-100">
+                        {absence.reason}
+                      </p>
                     )}
                     {absence.status === 'rejected' && absence.rejectionReason && (
-                      <div className="p-2.5 bg-red-50 border border-red-100 rounded-lg">
-                        <p className="text-sm text-red-700">
-                          <span className="font-medium">Grund:</span> {absence.rejectionReason}
+                      <div className="p-3 bg-rose-50 border border-rose-100 rounded-lg">
+                        <p className="text-sm text-rose-700">
+                          <span className="font-semibold">Grund:</span> {absence.rejectionReason}
                         </p>
                       </div>
                     )}
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                      <span className="inline-block w-1 h-1 rounded-full bg-gray-300" />
                       Beantragt am {format(new Date(absence.createdAt), 'dd.MM.yyyy', { locale: de })}
                     </p>
                   </div>
-                  {(absence.status === 'pending' || absence.status === 'approved') && (
+                  {(absence.status === 'pending' || (absence.status === 'approved' && new Date(absence.startDate) > new Date())) && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => handleDelete(absence._id)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 shrink-0"
+                      className="text-rose-600 hover:text-white hover:bg-rose-600 border-rose-200 hover:border-rose-600 transition-all shrink-0 shadow-sm"
                     >
                       <XCircle className="h-4 w-4 mr-1.5" />
                       Stornieren
@@ -232,7 +266,6 @@ export default function AbsencesPage() {
             ))}
           </div>
         )}
-        {/* ✅ FAB entfernt — ein Button im Header reicht */}
       </div>
     </DashboardLayout>
   );

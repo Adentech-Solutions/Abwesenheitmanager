@@ -2,13 +2,16 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Card from '@/components/ui/Card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { CalendarDays, Calendar as CalendarIcon, Clock, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { CalendarDays, Calendar as CalendarIcon, Clock, Sparkles, Info, Plus } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { de } from 'date-fns/locale';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 // ⭐ Holiday type (falls holidays.ts noch nicht existiert)
 interface Holiday {
@@ -129,122 +132,144 @@ export default function UpcomingAbsences() {
   if (absencesLoading || settingsLoading) {
     return (
       <Card>
-        <Skeleton className="h-6 w-40 mb-2" />
-        <Skeleton className="h-4 w-56 mb-4" />
-        <div className="space-y-3">
+        <CardHeader>
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-4 w-56 mt-2" />
+        </CardHeader>
+        <CardContent className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-16 w-full" />
+            <Skeleton key={i} className="h-20 w-full rounded-xl" />
           ))}
-        </div>
+        </CardContent>
       </Card>
     );
   }
 
   return (
     <Card>
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <CalendarDays className="h-5 w-5 text-primary-600" />
-              Kommende Abwesenheiten
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Deine Abwesenheiten & Feiertage
-            </p>
-          </div>
-        </div>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xl flex items-center gap-2">
+          <CalendarDays className="h-5 w-5 text-primary-600" />
+          Kommende Abwesenheiten
+        </CardTitle>
+        <p className="text-sm text-gray-500 font-medium">
+          Deine Abwesenheiten & Feiertage
+        </p>
+      </CardHeader>
 
+      <CardContent className="space-y-6 pt-4">
         {/* User Absences */}
         {upcomingAbsences.length > 0 && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-700">Deine genehmigten Abwesenheiten</h4>
-            {upcomingAbsences.map((absence: any) => (
-              <div
-                key={absence._id}
-                className="flex items-center justify-between p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow"
-              >
-                <div className="flex items-center gap-3">
-                  <CalendarIcon className="h-5 w-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {format(new Date(absence.startDate), 'dd.MM.yyyy', { locale: de })}
-                      {absence.startDate !== absence.endDate && (
-                        <> - {format(new Date(absence.endDate), 'dd.MM.yyyy', { locale: de })}</>
-                      )}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {absence.totalDays} {absence.totalDays === 1 ? 'Tag' : 'Tage'}
-                      {absence.isHalfDay && ' (Halbtag)'}
-                    </p>
+          <div className="space-y-4">
+            <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-widest px-1">Deine Anträge</h4>
+            <div className="space-y-3">
+              {upcomingAbsences.map((absence: any, index: number) => (
+                <div
+                  key={absence._id}
+                  className={cn(
+                    "flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-white hover:border-primary-100 hover:bg-primary-50/10 transition-all group animate-in fade-in slide-in-from-right-4 duration-500 fill-mode-both",
+                    `delay-[${index * 100}ms]`
+                  )}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-xl bg-gray-50 flex items-center justify-center group-hover:bg-primary-50 transition-colors">
+                      <CalendarIcon className="h-5 w-5 text-gray-400 group-hover:text-primary-600 transition-colors" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 leading-tight">
+                        {format(new Date(absence.startDate), 'dd. MMM', { locale: de })}
+                        {absence.startDate !== absence.endDate && (
+                          <span className="text-gray-400 font-normal mx-1">—</span>
+                        )}
+                        {absence.startDate !== absence.endDate && (
+                          format(new Date(absence.endDate), 'dd. MMM', { locale: de })
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500 font-medium mt-0.5">
+                        {absence.totalDays} {absence.totalDays === 1 ? 'Tag' : 'Tage'}
+                        {absence.isHalfDay && ' • Halbtag'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge variant={getAbsenceTypeVariant(absence.type)} className="shadow-none px-2.5">
+                      {getAbsenceTypeLabel(absence.type)}
+                    </Badge>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight min-w-[60px] text-right">
+                      {getDaysUntil(absence.startDate)}
+                    </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={getAbsenceTypeVariant(absence.type)}>
-                    {getAbsenceTypeLabel(absence.type)}
-                  </Badge>
-                  <span className="text-xs text-gray-500">
-                    {getDaysUntil(absence.startDate)}
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 
         {/* Separator if both exist */}
         {upcomingAbsences.length > 0 && upcomingHolidays.length > 0 && (
-          <Separator />
+          <Separator className="bg-gray-100" />
         )}
 
         {/* Upcoming Holidays */}
         {upcomingHolidays.length > 0 && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-yellow-500" />
-              Kommende Feiertage ({state})
+          <div className="space-y-4">
+            <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-widest px-1 flex items-center gap-2">
+              <Sparkles className="h-3 w-3 text-amber-500" />
+              Feiertage ({state})
             </h4>
-            <div className="space-y-2">
+            <div className="grid gap-2">
               {upcomingHolidays.map((holiday, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-2.5 rounded-lg bg-yellow-50 border border-yellow-200"
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-amber-50/50 border border-amber-100/50 hover:bg-amber-50 transition-colors animate-in fade-in slide-in-from-right-4 duration-500 fill-mode-both delay-300"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="text-2xl"></div>
+                  <div className="flex items-center gap-4">
+                    <div className="h-9 w-9 rounded-lg bg-amber-100/50 flex items-center justify-center">
+                      <Sparkles className="h-4 w-4 text-amber-600" />
+                    </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-bold text-amber-900 leading-tight">
                         {holiday.name}
                       </p>
-                      <p className="text-xs text-gray-600">
+                      <p className="text-xs text-amber-700/70 font-medium">
                         {format(holiday.date, 'EEEE, dd. MMMM', { locale: de })}
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-medium text-gray-700 bg-yellow-100 px-2 py-1 rounded">
+                  <Badge variant="outline" className="text-[10px] font-bold border-amber-200 text-amber-700 bg-white/50">
                     {getDaysUntil(holiday.date)}
-                  </span>
+                  </Badge>
                 </div>
               ))}
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              💡 Feiertage basierend auf Bundesland: {state}
-            </p>
+            <div className="flex items-center gap-1.5 px-1 opacity-60">
+              <Info className="h-3 w-3 text-gray-400" />
+              <p className="text-[11px] font-medium text-gray-500">
+                Basierend auf Bundesland: {state}
+              </p>
+            </div>
           </div>
         )}
 
         {/* Empty State */}
         {upcomingAbsences.length === 0 && upcomingHolidays.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            <CalendarDays className="h-12 w-12 mx-auto mb-3 opacity-20" />
-            <p className="font-medium">Keine kommenden Abwesenheiten</p>
-            <p className="text-sm mt-1">
-              Klicke auf den + Button um einen Antrag zu stellen
+          <div className="text-center py-12 px-6">
+            <div className="h-16 w-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CalendarDays className="h-8 w-8 text-gray-300" />
+            </div>
+            <h4 className="text-sm font-bold text-gray-900">Keine kommenden Events</h4>
+            <p className="text-xs text-gray-500 mt-2 max-w-[200px] mx-auto leading-relaxed font-medium">
+              Aktuell stehen keine Abwesenheiten oder Feiertage an.
             </p>
+            <Button asChild variant="outline" size="sm" className="mt-6 rounded-xl font-bold h-9 bg-white shadow-sm">
+              <Link href="/absences/new" className="flex items-center gap-2">
+                <Plus className="h-3.5 w-3.5" />
+                Neuer Antrag
+              </Link>
+            </Button>
           </div>
         )}
-      </div>
+      </CardContent>
     </Card>
   );
 }

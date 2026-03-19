@@ -1,543 +1,545 @@
-// src/app/absences/new/page.tsx
-
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { AutoReplySettings } from '@/types/absence';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import SubstituteSearch from '@/components/handover/SubstituteSearch';
 import HandoverSection, { HandoverItemInput, HandoverEmergencyContact } from '@/components/handover/HandoverSection';
-import DashboardLayout from '@/components/layout/DashboardLayout';
+import { 
+    ChevronLeft, ChevronRight, Calendar, UserPlus, FileText, 
+    Send, Info, AlertCircle, CheckCircle2, Sparkles, 
+    Clock, RefreshCcw, Layout, ClipboardList, BookOpen
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { format, differenceInDays, isSameDay } from 'date-fns';
+import { de } from 'date-fns/locale';
 
 // ─────────────────────────────────────────────
-// STEP INDICATOR
+// TYPES
 // ─────────────────────────────────────────────
 
-const StepIndicator = ({ currentStep, totalSteps, stepLabels }: {
-  currentStep: number; totalSteps: number; stepLabels: string[];
-}) => (
-  <div className="mb-8">
-    <div className="flex items-center justify-between relative">
-      <div className="absolute top-5 left-0 right-0 h-1 bg-gray-200 rounded-full -z-10">
-        <div
-          className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-500 ease-out"
-          style={{ width: `${((currentStep - 1) / (totalSteps - 1)) * 100}%` }}
-        />
-      </div>
-      {stepLabels.map((label, idx) => {
-        const step = idx + 1;
-        return (
-          <div key={step} className="flex flex-col items-center relative">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 ${step < currentStep ? 'bg-gradient-to-br from-green-400 to-green-600 text-white'
-                : step === currentStep ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white scale-110 shadow-lg'
-                  : 'bg-white border-2 border-gray-300 text-gray-400'
-              }`}>
-              {step < currentStep
-                ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                : step}
-            </div>
-            <span className={`mt-2 text-xs font-medium ${step === currentStep ? 'text-blue-600' : 'text-gray-500'}`}>
-              {label}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-);
+type Step = 'details' | 'substitute' | 'auto-reply' | 'confirmation';
+
+interface AbsenceType {
+    id: string;
+    label: string;
+    icon: any;
+    color: string;
+    bg: string;
+}
+
+const ABSENCE_TYPES: AbsenceType[] = [
+    { id: 'vacation', label: 'Erholungsurlaub', icon: Sparkles, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { id: 'sick', label: 'Krankheit', icon: AlertCircle, color: 'text-rose-600', bg: 'bg-rose-50' },
+    { id: 'training', label: 'Fortbildung', icon: BookOpen, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { id: 'parental', label: 'Elternzeit', icon: UserPlus, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+];
+
 
 // ─────────────────────────────────────────────
-// MAIN WIZARD
+// MAIN COMPONENT
 // ─────────────────────────────────────────────
 
 export default function NewAbsenceWizard() {
-  const router = useRouter();
-  const { data: session } = useSession();
-  const [currentStep, setCurrentStep] = useState(1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+    const { data: session, status } = useSession();
+    const router = useRouter();
+    
+    // Step State
+    const [currentStep, setCurrentStep] = useState<Step>('details');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Form Data
+    const [formData, setFormData] = useState({
+        type: 'vacation',
+        startDate: format(new Date(), 'yyyy-MM-dd'),
+        endDate: format(new Date(), 'yyyy-MM-dd'),
+        isHalfDay: false,
+        halfDayPeriod: 'morning' as 'morning' | 'afternoon',
+        reason: '',
+        substitute: { userId: '', email: '', name: '' },
+        handoverEnabled: false,
+        handoverItems: [] as HandoverItemInput[],
+        generalNotes: '',
+        emergencyContact: { availability: 'unavailable' } as HandoverEmergencyContact,
+        autoReplyEnabled: true,
+        autoReplySubject: 'Abwesenheitsnotiz: {name}',
+        autoReplyMessage: 'Vielen Dank für Ihre Nachricht. Ich bin von {startDate} bis {endDate} nicht im Büro. In dringenden Fällen wenden Sie sich bitte an {substituteName}.',
+    });
 
-  // Form
-  const [formData, setFormData] = useState({ type: 'vacation', startDate: '', endDate: '', isHalfDay: false, reason: '' });
+    // Auth Check
+    useEffect(() => {
+        if (status === 'unauthenticated') router.push('/');
+    }, [status, router]);
 
-  // Substitute
-  const [substitute, setSubstitute] = useState<{ userId: string; email: string; name: string } | null>(null);
+    // Derived State
+    const totalDays = differenceInDays(new Date(formData.endDate), new Date(formData.startDate)) + 1;
+    const isSingleDay = isSameDay(new Date(formData.startDate), new Date(formData.endDate));
 
-  // Handover
-  const [handoverEnabled, setHandoverEnabled] = useState(true);
-  const [handoverItems, setHandoverItems] = useState<HandoverItemInput[]>([]);
-  const [generalNotes, setGeneralNotes] = useState('');
-  const [emergencyContact, setEmergencyContact] = useState<HandoverEmergencyContact>({ availability: 'unavailable', phone: '', note: '' });
+    // Handlers
+    const handleNext = () => {
+        if (currentStep === 'details') setCurrentStep('substitute');
+        else if (currentStep === 'substitute') setCurrentStep('auto-reply');
+        else if (currentStep === 'auto-reply') setCurrentStep('confirmation');
+    };
 
-  // Auto-Reply
-  const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
-  const [recipients, setRecipients] = useState({ internal: true, external: true });
-  const [activateImmediately, setActivateImmediately] = useState(false);
-  const [customMessages, setCustomMessages] = useState<{ internal: string; external: string } | null>(null);
-  const [editingMessage, setEditingMessage] = useState<'internal' | 'external' | null>(null);
-  const [activePreviewTab, setActivePreviewTab] = useState<'internal' | 'external'>('internal');
+    const handleBack = () => {
+        if (currentStep === 'substitute') setCurrentStep('details');
+        else if (currentStep === 'auto-reply') setCurrentStep('substitute');
+        else if (currentStep === 'confirmation') setCurrentStep('auto-reply');
+    };
 
-  // Sync substitute → auto-reply
-  useEffect(() => {
-    if (substitute?.email) {
-      // Reset custom messages wenn Vertretung sich ändert (damit Vorschau aktualisiert)
-      setCustomMessages(null);
-    }
-  }, [substitute]);
+    const handleSubmit = async () => {
+        try {
+            setIsSubmitting(true);
+            const response = await fetch('/api/absences', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...formData,
+                    totalDays: formData.isHalfDay ? 0.5 : totalDays,
+                }),
+            });
 
-  const daysCount = formData.startDate && formData.endDate
-    ? Math.ceil((new Date(formData.endDate).getTime() - new Date(formData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
-    : 0;
-  const recommendHandover = daysCount >= 5;
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to create absence');
+            }
 
-  const steps = ['Details', 'Vertretung & Übergabe', 'Auto-Reply', 'Bestätigung'];
-  const totalSteps = steps.length;
+            toast.success('Abwesenheit erfolgreich beantragt');
+            router.push('/dashboard');
+        } catch (err: any) {
+            toast.error(err.message || 'Fehler beim Speichern');
+            console.error(err);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
-  // ─── Preview Generator ───
-  const generatePreview = (type: 'internal' | 'external'): string => {
-    const start = formData.startDate ? new Date(formData.startDate).toLocaleDateString('de-DE') : 'TT.MM.JJJJ';
-    const end = formData.endDate ? new Date(formData.endDate).toLocaleDateString('de-DE') : 'TT.MM.JJJJ';
+    if (status === 'loading') return <div className="h-screen flex items-center justify-center bg-gray-50"><LoadingSpinner /></div>;
 
-    let msg = `Guten Tag,\n\nvielen Dank für Ihre Nachricht.\n\nIch bin vom ${start} bis ${end} abwesend`;
-    msg += type === 'internal'
-      ? ' und stehe in dieser Zeit nur eingeschränkt zur Verfügung.'
-      : ' und habe in dieser Zeit keinen Zugriff auf meine E-Mails.';
+    const steps: { id: Step; label: string; icon: any }[] = [
+        { id: 'details', label: 'Details', icon: Calendar },
+        { id: 'substitute', label: 'Vertretung', icon: UserPlus },
+        { id: 'auto-reply', label: 'Auto-Reply', icon: Send },
+        { id: 'confirmation', label: 'Review', icon: CheckCircle2 },
+    ];
 
-    if (substitute?.name && substitute?.email) {
-      msg += `\n\nBei dringenden Angelegenheiten wenden Sie sich bitte an meine Vertretung:\n${substitute.name}\nE-Mail: ${substitute.email}`;
-    } else {
-      msg += '\n\nBei dringenden Angelegenheiten wenden Sie sich bitte an mein Team.';
-    }
-
-    msg += '\n\nIch werde Ihre Nachricht nach meiner Rückkehr bearbeiten.\n\nMit freundlichen Grüßen\n[Ihr Name]';
-    return msg;
-  };
-
-  const getPreviewText = (type: 'internal' | 'external') =>
-    customMessages?.[type] ?? generatePreview(type);
-
-  // ─── Toast ───
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    const toast = document.createElement('div');
-    toast.className = `fixed top-4 right-4 px-6 py-4 rounded-xl shadow-2xl z-50 transition-all transform translate-x-full ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`;
-    toast.innerHTML = `<div class="flex items-center gap-3"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${type === 'success' ? 'M5 13l4 4L19 7' : 'M6 18L18 6M6 6l12 12'}"></path></svg><span class="font-medium">${message}</span></div>`;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.style.transform = 'translateX(0)', 10);
-    setTimeout(() => { toast.style.transform = 'translateX(400px)'; setTimeout(() => document.body.contains(toast) && document.body.removeChild(toast), 300); }, 4000);
-  };
-
-  const getLogicalStep = (v: number) => steps[v - 1];
-
-  const handleNext = () => {
-    const label = getLogicalStep(currentStep);
-    if (label === 'Details') {
-      if (!formData.startDate || !formData.endDate) { showToast('Bitte Datum auswählen', 'error'); return; }
-    }
-    if (label === 'Vertretung & Übergabe' && handoverEnabled) {
-      if (handoverItems.filter(i => i.title.trim()).length === 0 && !generalNotes.trim()) {
-        showToast('Bitte mindestens eine Aufgabe oder allgemeine Hinweise angeben', 'error'); return;
-      }
-      if (emergencyContact.availability === 'emergency_only' && !emergencyContact.phone?.trim()) {
-        showToast('Telefonnummer für Notfälle erforderlich', 'error'); return;
-      }
-    }
-    setCurrentStep(prev => Math.min(prev + 1, totalSteps));
-  };
-
-  const handleBack = () => setCurrentStep(prev => Math.max(prev - 1, 1));
-
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
-    setError('');
-    try {
-      const submissionData: any = { ...formData };
-
-      if (substitute?.email) {
-        submissionData.substitute = { email: substitute.email, name: substitute.name };
-      }
-
-      if (handoverEnabled && (handoverItems.filter(i => i.title.trim()).length > 0 || generalNotes.trim())) {
-        submissionData.handover = {
-          enabled: true,
-          items: handoverItems.filter(i => i.title.trim()).map(item => ({
-            id: item.id,
-            title: item.title,
-            description: item.description || undefined,
-            priority: item.priority,
-            dueDate: item.dueDate,
-            links: item.links.filter(l => l.title.trim() && l.url.trim()),
-            attachments: item.attachments || [],
-            isUrgent: item.priority === 'high',
-          })),
-          generalNotes: generalNotes.trim() || undefined,
-          emergencyContact,
-        };
-      }
-
-      if (autoReplyEnabled) {
-        submissionData.autoReplySettings = {
-          enabled: true,
-          hasSubstitute: !!substitute?.email,
-          substituteInfo: substitute?.email ? { email: substitute.email, name: substitute.name } : undefined,
-          recipients,
-          timing: { activateImmediately, scheduledDate: new Date(formData.startDate), scheduledTime: '00:00' },
-          customMessages: customMessages || undefined,
-        };
-      }
-
-      const res = await fetch('/api/absences', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submissionData),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Fehler beim Erstellen');
-
-      showToast('Antrag erfolgreich erstellt', 'success');
-      setTimeout(() => router.push('/dashboard'), 500);
-    } catch (err: any) {
-      setError(err.message);
-      showToast(err.message || 'Fehler', 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const currentLabel = getLogicalStep(currentStep);
-  const validItemCount = handoverItems.filter(i => i.title.trim()).length;
-  const highPriorityCount = handoverItems.filter(i => i.priority === 'high' && i.title.trim()).length;
-
-  return (
-    <DashboardLayout>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30">
-
-        {/* Header */}
-        <div className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-40">
-          <div className="max-w-4xl mx-auto px-4 py-6 flex items-center justify-between">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Neue Abwesenheit
-            </h1>
-            <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-800 transition-colors">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <StepIndicator currentStep={currentStep} totalSteps={totalSteps} stepLabels={steps} />
-
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* ─── Step 1: Details ─── */}
-          {currentLabel === 'Details' && (
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-8 animate-fadeIn">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Abwesenheitsdetails</h2>
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">Art der Abwesenheit</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { value: 'vacation', label: 'Urlaub', gradient: 'from-blue-500 to-cyan-500', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-                      { value: 'sick', label: 'Krankheit', gradient: 'from-red-500 to-pink-500', icon: 'M12 6v6m0 0v6m0-6h6m-6 0H6' },
-                      { value: 'training', label: 'Fortbildung', gradient: 'from-purple-500 to-indigo-500', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
-                      { value: 'parental', label: 'Elternzeit', gradient: 'from-green-500 to-emerald-500', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
-                    ].map(t => (
-                      <button key={t.value} type="button"
-                        onClick={() => setFormData({ ...formData, type: t.value })}
-                        className={`p-4 rounded-xl border-2 transition-all duration-200 ${formData.type === t.value
-                            ? `border-transparent bg-gradient-to-br ${t.gradient} text-white shadow-lg scale-105`
-                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md text-gray-700'
-                          }`}>
-                        <svg className="w-7 h-7 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={t.icon} />
-                        </svg>
-                        <span className="text-sm font-semibold">{t.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Von</label>
-                    <input type="date" value={formData.startDate}
-                      onChange={e => setFormData({ ...formData, startDate: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Bis</label>
-                    <input type="date" value={formData.endDate} min={formData.startDate}
-                      onChange={e => setFormData({ ...formData, endDate: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-                  </div>
-                </div>
-
-                <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors">
-                  <input type="checkbox" checked={formData.isHalfDay}
-                    onChange={e => setFormData({ ...formData, isHalfDay: e.target.checked })}
-                    className="w-5 h-5 text-blue-600 rounded" />
-                  <span className="text-sm font-medium text-gray-700">Halber Tag</span>
-                </label>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Begründung (optional)</label>
-                  <textarea value={formData.reason} rows={3}
-                    onChange={e => setFormData({ ...formData, reason: e.target.value })}
-                    placeholder="Weitere Details zur Abwesenheit..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ─── Step 2: Vertretung & Übergabe ─── */}
-          {currentLabel === 'Vertretung & Übergabe' && (
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-8 animate-fadeIn">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Vertretung & Übergabe</h2>
-              <div className="space-y-5">
-                <SubstituteSearch
-                  onSelect={sub => setSubstitute(sub.email ? sub : null)}
-                  selectedEmail={substitute?.email}
-                />
-                <HandoverSection
-                  enabled={handoverEnabled}
-                  onToggle={setHandoverEnabled}
-                  items={handoverItems}
-                  onItemsChange={setHandoverItems}
-                  generalNotes={generalNotes}
-                  onGeneralNotesChange={setGeneralNotes}
-                  emergencyContact={emergencyContact}
-                  onEmergencyContactChange={setEmergencyContact}
-                  substituteName={substitute?.name}
-                  recommendHandover={recommendHandover}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ─── Step 3: Auto-Reply ─── */}
-          {currentLabel === 'Auto-Reply' && (
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-8 animate-fadeIn">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Automatische Abwesenheitsnotiz</h2>
-                  <p className="text-sm text-gray-500 mt-0.5">Outlook sendet während Ihrer Abwesenheit automatisch eine Antwort</p>
-                </div>
-                {/* Toggle */}
-                <button type="button" onClick={() => setAutoReplyEnabled(!autoReplyEnabled)}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${autoReplyEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}>
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${autoReplyEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-              </div>
-
-              {!autoReplyEnabled ? (
-                <div className="text-center py-10 text-gray-400">
-                  <svg className="w-12 h-12 mx-auto mb-3 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  <p className="text-sm">Automatische Abwesenheitsnotiz ist deaktiviert</p>
-                </div>
-              ) : (
-                <div className="space-y-5">
-
-                  {/* Substitute info — readonly, aus Schritt 2 */}
-                  {substitute?.email && (
-                    <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 text-sm">
-                      <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="text-gray-600">
-                        Vertretung: <strong className="text-gray-800">{substitute.name}</strong> ({substitute.email}) — wird automatisch in der Nachricht erwähnt
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Empfänger */}
-                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Empfänger</h3>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="checkbox" checked={recipients.internal}
-                          onChange={e => setRecipients({ ...recipients, internal: e.target.checked })}
-                          className="w-4 h-4 text-blue-600 rounded" />
-                        <span className="text-sm text-gray-700">Intern (Kollegen)</span>
-                      </label>
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="checkbox" checked={recipients.external}
-                          onChange={e => setRecipients({ ...recipients, external: e.target.checked })}
-                          className="w-4 h-4 text-blue-600 rounded" />
-                        <span className="text-sm text-gray-700">Extern (Kunden & Partner)</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Zeitplanung */}
-                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Aktivierung</h3>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="radio" checked={activateImmediately} onChange={() => setActivateImmediately(true)} className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm text-gray-700">Sofort aktivieren</span>
-                      </label>
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="radio" checked={!activateImmediately} onChange={() => setActivateImmediately(false)} className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm text-gray-700">
-                          Automatisch am Startdatum aktivieren
-                          {formData.startDate && <span className="ml-1 text-gray-500">({new Date(formData.startDate).toLocaleDateString('de-DE')})</span>}
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Nachrichtenvorschau */}
-                  <div className="border border-gray-200 rounded-xl overflow-hidden">
-                    <div className="flex border-b border-gray-200 bg-gray-50">
-                      <button type="button"
-                        onClick={() => setActivePreviewTab('internal')}
-                        className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${activePreviewTab === 'internal' ? 'bg-white text-gray-900 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-700'}`}>
-                        Interne Nachricht
-                      </button>
-                      <button type="button"
-                        onClick={() => setActivePreviewTab('external')}
-                        className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${activePreviewTab === 'external' ? 'bg-white text-gray-900 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-700'}`}>
-                        Externe Nachricht
-                      </button>
-                    </div>
-
-                    <div className="p-4 bg-white">
-                      {editingMessage === activePreviewTab ? (
-                        <div className="space-y-3">
-                          <textarea
-                            rows={10}
-                            value={customMessages?.[activePreviewTab] ?? generatePreview(activePreviewTab)}
-                            onChange={e => setCustomMessages(prev => ({ internal: prev?.internal ?? generatePreview('internal'), external: prev?.external ?? generatePreview('external'), [activePreviewTab]: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                          />
-                          <div className="flex gap-2">
-                            <button type="button"
-                              onClick={() => setEditingMessage(null)}
-                              className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
-                              Fertig
-                            </button>
-                            <button type="button"
-                              onClick={() => {
-                                setCustomMessages(prev => {
-                                  if (!prev) return null;
-                                  const updated = { ...prev, [activePreviewTab]: generatePreview(activePreviewTab) };
-                                  return updated;
-                                });
-                                setEditingMessage(null);
-                              }}
-                              className="px-3 py-1.5 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
-                              Zurücksetzen
-                            </button>
-                          </div>
+    return (
+        <DashboardLayout>
+            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+                
+                {/* Wizard Header */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2">
+                    <div className="flex items-center gap-5">
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => router.push('/dashboard')}
+                            className="h-12 w-12 p-0 rounded-2xl border border-gray-100 bg-white shadow-sm hover:bg-gray-50"
+                        >
+                            <ChevronLeft className="h-6 w-6 text-gray-400" />
+                        </Button>
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
+                                <Layout className="h-7 w-7 text-primary-600" />
+                                Neue Abwesenheit
+                            </h1>
+                            <p className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-widest flex items-center gap-2">
+                                Schritt {steps.findIndex(s => s.id === currentStep) + 1} von 4
+                                <span className="h-1 w-1 rounded-full bg-gray-300" />
+                                {steps.find(s => s.id === currentStep)?.label}
+                            </p>
                         </div>
-                      ) : (
-                        <div className="space-y-3">
-                          <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
-                            {getPreviewText(activePreviewTab)}
-                          </pre>
-                          <button type="button"
-                            onClick={() => setEditingMessage(activePreviewTab)}
-                            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Nachricht bearbeiten
-                          </button>
-                        </div>
-                      )}
                     </div>
-                  </div>
-
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ─── Step 4: Bestätigung ─── */}
-          {currentLabel === 'Bestätigung' && (
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-8 animate-fadeIn">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Zusammenfassung</h2>
-              <div className="space-y-4">
-
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Abwesenheit</h3>
-                  <p className="text-sm text-gray-600"><strong>Art:</strong> {
-                    { vacation: 'Urlaub', sick: 'Krankheit', training: 'Fortbildung', parental: 'Elternzeit' }[formData.type] ?? formData.type
-                  }</p>
-                  <p className="text-sm text-gray-600"><strong>Zeitraum:</strong> {formData.startDate} bis {formData.endDate}</p>
-                  {formData.reason && <p className="text-sm text-gray-600"><strong>Begründung:</strong> {formData.reason}</p>}
                 </div>
 
-                {substitute?.email && (
-                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Vertretung</h3>
-                    <p className="text-sm text-gray-600">{substitute.name} — {substitute.email}</p>
-                  </div>
+                {/* Step Progress Bar */}
+                <div className="grid grid-cols-4 gap-2 md:gap-4 px-1">
+                    {steps.map((step, idx) => {
+                        const isActive = currentStep === step.id;
+                        const isPast = steps.findIndex(s => s.id === currentStep) > idx;
+                        const Icon = step.icon;
+                        
+                        return (
+                            <div key={step.id} className="relative">
+                                <div className={cn(
+                                    "h-1.5 rounded-full transition-all duration-500",
+                                    isActive ? "bg-primary-600 w-full shadow-[0_0_10px_rgba(37,99,235,0.3)]" : 
+                                    isPast ? "bg-emerald-500 w-full" : "bg-gray-100 w-full"
+                                )} />
+                                <div className="hidden md:flex items-center gap-2 mt-3 overflow-hidden">
+                                     <div className={cn(
+                                         "flex items-center justify-center h-5 w-5 rounded-md text-[10px] font-black border transition-all duration-300",
+                                         isActive ? "bg-primary-600 border-primary-500 text-white" : 
+                                         isPast ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-white border-gray-100 text-gray-300"
+                                     )}>
+                                         {isPast ? <CheckCircle2 className="h-3 w-3" /> : idx + 1}
+                                     </div>
+                                     <span className={cn(
+                                         "text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-colors",
+                                         isActive ? "text-primary-600" : isPast ? "text-emerald-600" : "text-gray-300"
+                                     )}>
+                                         {step.label}
+                                     </span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Step Content */}
+                <div className="min-h-[400px]">
+                    {currentStep === 'details' && (
+                        <Card className="p-8 border-gray-100 shadow-sm animate-in zoom-in-95 duration-500 slide-in-from-right-4">
+                            <div className="space-y-8">
+                                <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
+                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                                        <div className="h-2 w-2 rounded-full bg-primary-500" />
+                                        Abwesenheits-Typ
+                                    </h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                        {ABSENCE_TYPES.map((type) => (
+                                            <button
+                                                key={type.id}
+                                                onClick={() => setFormData({ ...formData, type: type.id })}
+                                                className={cn(
+                                                    "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-300 group relative overflow-hidden",
+                                                    formData.type === type.id 
+                                                        ? "bg-primary-600 border-primary-500 shadow-xl shadow-primary-100 scale-105" 
+                                                        : "bg-white border-gray-50 hover:border-gray-100 hover:bg-gray-50/50"
+                                                )}
+                                            >
+                                                {formData.type === type.id && (
+                                                    <div className="absolute top-0 right-0 p-2 text-white/20">
+                                                        <Sparkles className="h-8 w-8" />
+                                                    </div>
+                                                )}
+                                                <div className={cn(
+                                                    "p-3 rounded-xl mb-4 transition-transform group-hover:scale-110",
+                                                    formData.type === type.id ? "bg-white/10 text-white" : `${type.bg} ${type.color}`
+                                                )}>
+                                                    <type.icon className="h-7 w-7" />
+                                                </div>
+                                                <span className={cn(
+                                                    "text-[11px] font-black uppercase tracking-widest text-center leading-tight",
+                                                    formData.type === type.id ? "text-white" : "text-gray-900"
+                                                )}>{type.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-4">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Zeitraum Wählen</label>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase ml-1">Beginn</span>
+                                                <div className="relative group">
+                                                    <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300 group-focus-within:text-primary-500 transition-colors" />
+                                                    <input 
+                                                        type="date" 
+                                                        value={formData.startDate}
+                                                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                                        className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-100 font-bold text-gray-700 bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase ml-1">Ende</span>
+                                                <div className="relative group">
+                                                    <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300 group-focus-within:text-primary-500 transition-colors" />
+                                                    <input 
+                                                        type="date" 
+                                                        value={formData.endDate}
+                                                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                                        className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-100 font-bold text-gray-700 bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
+                                             <div className="flex items-center gap-3">
+                                                 <div className="h-8 w-8 rounded-lg bg-white border border-gray-100 flex items-center justify-center">
+                                                     <Clock className="h-4 w-4 text-primary-500" />
+                                                 </div>
+                                                 <span className="text-sm font-bold text-gray-700">Halber Tag</span>
+                                             </div>
+                                             <button 
+                                                onClick={() => setFormData({ ...formData, isHalfDay: !formData.isHalfDay })}
+                                                className={cn(
+                                                    "w-12 h-6 rounded-full transition-all duration-300 relative",
+                                                    formData.isHalfDay ? "bg-primary-600" : "bg-gray-200"
+                                                )}
+                                             >
+                                                <div className={cn(
+                                                    "absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm",
+                                                    formData.isHalfDay ? "translate-x-6" : "translate-x-0"
+                                                )} />
+                                             </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Grund / Notiz (optional)</label>
+                                        <textarea 
+                                            value={formData.reason}
+                                            onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                                            placeholder="Geben Sie hier ggf. weitere Informationen an..."
+                                            rows={5}
+                                            className="w-full px-5 py-4 rounded-xl border border-gray-100 font-bold text-gray-700 bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none resize-none shadow-sm"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-center p-4 bg-primary-50/30 rounded-2xl border border-primary-100 gap-3 border-dashed">
+                                    <div className="p-2 bg-white rounded-xl text-primary-600 shadow-sm">
+                                        <Calendar className="h-5 w-5" />
+                                    </div>
+                                    <p className="text-sm font-black text-primary-800 uppercase tracking-tight">
+                                        Gesamt: {formData.isHalfDay ? '0.5' : totalDays} {totalDays === 1 && !formData.isHalfDay ? 'Tag' : 'Tage'} Abwesenheit
+                                    </p>
+                                </div>
+                            </div>
+                        </Card>
+                    )}
+
+                    {currentStep === 'substitute' && (
+                        <div className="space-y-6 animate-in zoom-in-95 duration-500 slide-in-from-right-4">
+                            <Card className="p-8 border-gray-100 shadow-sm bg-white">
+                                <div className="max-w-xl mx-auto space-y-8">
+                                    <div className="text-center space-y-2">
+                                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Team-Unterstützung</h3>
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Wer übernimmt Ihre Aufgaben?</p>
+                                    </div>
+                                    <SubstituteSearch 
+                                        selectedEmail={formData.substitute.email}
+                                        onSelect={(sub) => setFormData({ ...formData, substitute: sub })} 
+                                    />
+                                    {formData.substitute.name && (
+                                        <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center gap-3 animate-in zoom-in-95">
+                                            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                                            <span className="text-xs font-bold text-emerald-800 uppercase tracking-tight">
+                                                {formData.substitute.name} wurde als Vertretung ausgewählt
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </Card>
+
+                            <HandoverSection 
+                                enabled={formData.handoverEnabled}
+                                onToggle={(v) => setFormData({ ...formData, handoverEnabled: v })}
+                                items={formData.handoverItems}
+                                onItemsChange={(items) => setFormData({ ...formData, handoverItems: items })}
+                                generalNotes={formData.generalNotes}
+                                onGeneralNotesChange={(notes) => setFormData({ ...formData, generalNotes: notes })}
+                                emergencyContact={formData.emergencyContact}
+                                onEmergencyContactChange={(ec) => setFormData({ ...formData, emergencyContact: ec })}
+                                substituteName={formData.substitute.name}
+                                recommendHandover={totalDays >= 3}
+                            />
+                        </div>
+                    )}
+
+                    {currentStep === 'auto-reply' && (
+                        <Card className="p-8 border-gray-100 shadow-sm animate-in zoom-in-95 duration-500 slide-in-from-right-4">
+                            <div className="max-w-2xl mx-auto space-y-8">
+                                <div className="flex items-center justify-between p-6 bg-gray-50/50 rounded-2xl border border-gray-100">
+                                    <div className="flex items-center gap-4">
+                                        <div className={cn(
+                                            "h-12 w-12 rounded-2xl flex items-center justify-center shadow-sm border transition-all duration-500",
+                                            formData.autoReplyEnabled ? "bg-primary-600 text-white" : "bg-white text-gray-300"
+                                        )}>
+                                            <Send className="h-6 w-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Auto-Reply</h3>
+                                            <p className="text-[10px] font-bold text-gray-400 mt-0.5 uppercase tracking-tight">
+                                                Automatische Abwesenheitsnotiz via Graph API
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setFormData({ ...formData, autoReplyEnabled: !formData.autoReplyEnabled })}
+                                        className={cn(
+                                            "w-14 h-8 rounded-full transition-all duration-300 relative shadow-inner",
+                                            formData.autoReplyEnabled ? "bg-primary-600" : "bg-gray-100"
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            "absolute top-1 left-1 w-6 h-6 rounded-full bg-white transition-all shadow-xl",
+                                            formData.autoReplyEnabled ? "translate-x-6" : "translate-x-0"
+                                        )} />
+                                    </button>
+                                </div>
+
+                                {formData.autoReplyEnabled && (
+                                    <div className="space-y-6 pt-4 animate-in zoom-in-95">
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Betreff der Nachricht</label>
+                                            <input 
+                                                type="text" 
+                                                value={formData.autoReplySubject}
+                                                onChange={(e) => setFormData({ ...formData, autoReplySubject: e.target.value })}
+                                                className="w-full h-12 px-5 rounded-2xl border border-gray-100 font-bold text-gray-700 bg-white focus:border-primary-500 transition-all outline-none"
+                                            />
+                                        </div>
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Inhalt der Abwesenheitsnotiz</label>
+                                            <div className="relative">
+                                                <textarea 
+                                                    value={formData.autoReplyMessage}
+                                                    onChange={(e) => setFormData({ ...formData, autoReplyMessage: e.target.value })}
+                                                    rows={6}
+                                                    className="w-full px-5 py-4 rounded-2xl border border-gray-100 font-bold text-gray-700 bg-white focus:border-primary-500 transition-all outline-none resize-none"
+                                                />
+                                                <div className="absolute bottom-4 right-4 bg-gray-50/50 p-2 rounded-lg border border-gray-100 backdrop-blur-sm">
+                                                    <RefreshCcw 
+                                                        className="h-4 w-4 text-primary-500 cursor-pointer hover:rotate-180 transition-transform duration-500" 
+                                                        onClick={() => setFormData({ ...formData, autoReplyMessage: `Vielen Dank für Ihre Nachricht. Ich bin von ${format(new Date(formData.startDate), 'dd.MM.yyyy')} bis ${format(new Date(formData.endDate), 'dd.MM.yyyy')} nicht im Büro. In dringenden Fällen wenden Sie sich bitte an ${formData.substitute.name || 'meine Vertretung'}.` })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="p-4 bg-primary-50/30 rounded-2xl border border-primary-100 flex items-start gap-4">
+                                            <Info className="h-5 w-5 text-primary-500 shrink-0 mt-0.5" />
+                                            <p className="text-[10px] font-bold text-primary-800 leading-relaxed uppercase tracking-tight">
+                                                Platzhalter wie <span className="underline">{'{startDate}'}</span>, <span className="underline">{'{endDate}'}</span> und <span className="underline">{'{substituteName}'}</span> werden beim Versenden automatisch durch Ihre aktuellen Daten ersetzt.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </Card>
+                    )}
+
+                    {currentStep === 'confirmation' && (
+                        <div className="space-y-6 animate-in zoom-in-95 duration-500 slide-in-from-right-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Card className="p-8 border-gray-100 shadow-sm relative overflow-hidden group">
+                                     <div className="absolute -right-4 -top-4 text-emerald-500/5 group-hover:scale-125 transition-transform duration-1000">
+                                         <CheckCircle2 className="h-32 w-32" />
+                                     </div>
+                                     <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                         <Calendar className="h-4 w-4 text-primary-500" /> Abwesenheit
+                                     </h3>
+                                     <div className="space-y-4">
+                                         <div className="flex items-center justify-between">
+                                             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Typ</span>
+                                             <Badge className="bg-primary-50 text-primary-700 font-black px-3 py-1 rounded-full uppercase tracking-tighter text-[10px]">
+                                                 {ABSENCE_TYPES.find(t => t.id === formData.type)?.label}
+                                             </Badge>
+                                         </div>
+                                         <div className="flex items-center justify-between border-t border-gray-50 pt-4">
+                                             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Zeitraum</span>
+                                             <div className="text-right">
+                                                 <p className="text-sm font-black text-gray-900 tracking-tight">
+                                                     {format(new Date(formData.startDate), 'dd. LLL yyyy', { locale: de })}
+                                                 </p>
+                                                 <p className="text-[10px] font-black text-primary-500 uppercase tracking-tight text-center">— bis —</p>
+                                                 <p className="text-sm font-black text-gray-900 tracking-tight">
+                                                     {format(new Date(formData.endDate), 'dd. LLL yyyy', { locale: de })}
+                                                 </p>
+                                             </div>
+                                         </div>
+                                         <div className="flex items-center justify-between border-t border-gray-50 pt-4">
+                                              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Gesamt</span>
+                                              <span className="text-sm font-black text-primary-700">{formData.isHalfDay ? '0.5' : totalDays} Tage</span>
+                                         </div>
+                                     </div>
+                                </Card>
+
+                                <Card className="p-8 border-gray-100 shadow-sm">
+                                     <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                         <UserPlus className="h-4 w-4 text-primary-500" /> Vertretung & Übergabe
+                                     </h3>
+                                     <div className="space-y-4 text-center py-4">
+                                         {formData.substitute.name ? (
+                                             <div className="space-y-3">
+                                                  <div className="h-16 w-16 rounded-2xl bg-primary-50 text-primary-600 border border-primary-100 flex items-center justify-center mx-auto shadow-sm">
+                                                      <UserPlus className="h-8 w-8" />
+                                                  </div>
+                                                  <div>
+                                                      <p className="text-sm font-black text-gray-900 tracking-tight">{formData.substitute.name}</p>
+                                                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{formData.substitute.email}</p>
+                                                  </div>
+                                                  {formData.handoverEnabled && (
+                                                      <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-black uppercase tracking-widest">
+                                                          <ClipboardList className="h-3 w-3" /> {formData.handoverItems.filter(i => i.title.trim()).length} Übergabe-Tasks
+                                                      </div>
+                                                  )}
+                                             </div>
+                                         ) : (
+                                             <div className="py-6 italic text-gray-300 text-sm font-medium">Keine Vertretung angegeben</div>
+                                         )}
+                                     </div>
+                                </Card>
+                            </div>
+
+                            <Card className="p-8 border-gray-100 shadow-sm bg-gradient-to-r from-primary-600 to-indigo-700 text-white relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 text-white/10 group-hover:scale-125 transition-transform duration-1000">
+                                    <Send className="h-24 w-24" />
+                                </div>
+                                <h3 className="text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Info className="h-4 w-4" /> Ready for Takeoff?
+                                </h3>
+                                <p className="text-sm font-medium leading-relaxed mb-6 max-w-lg">
+                                    Nach Klick auf "Abwesenheit beantragen" wird Ihr Team informiert und (falls aktiviert) Ihre Outlook-Abwesenheitsnotiz hinterlegt.
+                                </p>
+                                <Button 
+                                    onClick={handleSubmit}
+                                    disabled={isSubmitting}
+                                    className="w-full h-14 bg-white text-primary-700 hover:bg-gray-50 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-black/20 group"
+                                >
+                                    {isSubmitting ? (
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-5 h-5 border-2 border-primary-100 border-t-primary-600 rounded-full animate-spin" />
+                                            Wird verarbeitet...
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-3">
+                                            Abwesenheit beantragen
+                                            <Send className="h-5 w-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                                        </div>
+                                    )}
+                                </Button>
+                            </Card>
+                        </div>
+                    )}
+                </div>
+
+                {/* Wizard Navigation */}
+                {currentStep !== 'confirmation' && (
+                    <div className="flex items-center justify-between pt-4 pb-12">
+                        <Button 
+                            variant="ghost" 
+                            disabled={currentStep === 'details' || isSubmitting}
+                            onClick={handleBack}
+                            className={cn(
+                                "h-14 px-8 rounded-2xl font-black uppercase tracking-widest text-[11px] border border-gray-100 bg-white shadow-sm transition-all",
+                                currentStep === 'details' ? "opacity-0 pointer-events-none" : "hover:bg-gray-50"
+                            )}
+                        >
+                            <ChevronLeft className="h-4 w-4 mr-2" /> Zurück
+                        </Button>
+                        <Button 
+                            onClick={handleNext}
+                            disabled={isSubmitting}
+                            className="h-14 px-10 rounded-2xl font-black uppercase tracking-widest text-[11px] bg-primary-600 text-white shadow-xl shadow-primary-100 hover:bg-primary-700 hover:-translate-y-0.5 transition-all group"
+                        >
+                            {currentStep === 'auto-reply' ? 'Review & Senden' : 'Weiter'} 
+                            <ChevronRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                        </Button>
+                    </div>
                 )}
-
-                {handoverEnabled && (
-                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Übergabe</h3>
-                    <p className="text-sm text-gray-600">
-                      {validItemCount} Aufgabe{validItemCount !== 1 ? 'n' : ''}
-                      {highPriorityCount > 0 && <span className="ml-1 text-red-600">({highPriorityCount} hohe Priorität)</span>}
-                    </p>
-                    {generalNotes.trim() && <p className="text-sm text-gray-600">Allgemeine Hinweise: Ja</p>}
-                    <p className="text-sm text-gray-600">Erreichbarkeit: {
-                      { unavailable: 'Nicht erreichbar', emergency_only: 'Nur Notfälle', limited_email: 'Per E-Mail' }[emergencyContact.availability]
-                    }</p>
-                  </div>
-                )}
-
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Automatische Abwesenheitsnotiz</h3>
-                  <p className="text-sm text-gray-600"><strong>Status:</strong> {autoReplyEnabled ? 'Aktiviert' : 'Deaktiviert'}</p>
-                  {autoReplyEnabled && (
-                    <p className="text-sm text-gray-600">
-                      Empfänger: {[recipients.internal && 'Intern', recipients.external && 'Extern'].filter(Boolean).join(', ')}
-                    </p>
-                  )}
-                </div>
-
-              </div>
             </div>
-          )}
-
-          {/* Navigation */}
-          <div className="mt-8 flex justify-between">
-            <button onClick={handleBack} disabled={currentStep === 1}
-              className={`px-6 py-3 rounded-xl font-semibold transition-all ${currentStep === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white border-2 border-gray-300 text-gray-700 hover:border-gray-400 hover:shadow-md'}`}>
-              Zurück
-            </button>
-            {currentStep < totalSteps ? (
-              <button onClick={handleNext}
-                className="px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:scale-105 transition-all">
-                Weiter
-              </button>
-            ) : (
-              <button onClick={handleSubmit} disabled={isSubmitting}
-                className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50">
-                {isSubmitting ? 'Wird erstellt...' : 'Antrag erstellen'}
-              </button>
-            )}
-          </div>
-        </div>
-
-        <style jsx global>{`
-          @keyframes fadeIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-          .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
-        `}</style>
-      </div>
-    </DashboardLayout>
-  );
+        </DashboardLayout>
+    );
 }
