@@ -33,6 +33,8 @@ yarn-error.log*
 
 #AI Agents
 .cursor/
+/docs/diagrams/
+/docs
 
 # OS
 .DS_Store

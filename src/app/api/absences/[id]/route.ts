@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
-import { requireRole } from '@/lib/rbac';
+import { requireRole, canViewUserData } from '@/lib/rbac';
 import User from '@/models/User';
 import { sendTeamsMessageDelegated } from '@/lib/graph-client-delegated';
 
@@ -13,7 +13,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, dbUser } = await requireRole(['employee', 'manager', 'admin']);
+    const { user, dbUser } = await requireRole(['employee', 'teamlead', 'manager', 'hr_manager', 'admin']);
 
     await connectDB();
 
@@ -22,24 +22,8 @@ export async function GET(
       return NextResponse.json({ error: 'Absence not found' }, { status: 404 });
     }
 
-    // 🔒 Security: Check ownership or admin role
-    if (absence.userEmail !== user.email && dbUser.role !== 'admin' && dbUser.role !== 'manager') {
-      // Managers might need to see cancellations, but strict reading suggests only owner/admin
-      // Adding Manager for now as they often need to view details
-      // But wait, GET usually allows viewing if you are a manager of that user?
-      // Let's stick to base safety: specific logic.
-    }
-
-    // Allow if: Admin, OR Owner, OR Manager of Owner
-    // We can use canViewUserData from RBAC if imported, but let's keep it simple for now or import it.
-    // For this pass, let's just allow reading if you have the role, assuming the ID is known? 
-    // No, that's unsafe. 
-
-    const isOwner = absence.userEmail === user.email;
-    const isAdmin = dbUser.role === 'admin';
-    const isManager = dbUser.role === 'manager'; // crude check, ideally check if manager OF user
-
-    if (!isOwner && !isAdmin && !isManager) {
+    const canView = await canViewUserData(dbUser, absence.userId);
+    if (!canView) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

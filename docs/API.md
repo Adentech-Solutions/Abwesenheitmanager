@@ -1,80 +1,90 @@
-# API Documentation
+# API Referenz - Freyetag Abwesenheitsverwaltung
 
-This document describes the API endpoints available in the Absence Management App.
-
-## Authentication & Authorization
-Most endpoints require an active session and specific roles. Authentication is handled via NextAuth with Azure AD / Entra ID.
-
-| Role | Description |
-| :--- | :--- |
-| `employee` | Regular user, can manage own absences. |
-| `teamlead` | Can view team absences and manage own. |
-| `manager` | Can approve absences for direct reports. |
-| `hr_manager` | Full access to absences, departments, and user data. |
-| `admin` | System-wide configuration and user management. |
+Dieses Dokument bietet eine vollständige Übersicht über die REST-API der Freyetag Abwesenheitsverwaltung. Alle Endpunkte sind durch HTTPS und Rollenprüfung gesichert.
 
 ---
 
-## Absences
+## 🔐 Rollen & Zugriff
+
+Die Rollenprüfung erfolgt über den Header `Session.user.role`.
+
+- **`employee`**: Standard Zugriff auf eigene Daten.
+- **`teamlead`**: Zugriff auf das eigene Team (Department).
+- **`manager`**: Zugriff auf zugewiesene Mitarbeiter.
+- **`hr_manager`**: Globaler Lese- und Schreibzugriff auf Mitarbeiterdaten.
+- **`admin`**: Vollständiger Systemzugriff.
+
+---
+
+## 📅 Abwesenheiten (Absences)
 
 ### `GET /api/absences`
-Returns a list of absences for the current user.
-- **Auth**: `employee`+
-- **Response**: `Absence[]`
+- **Rollen**: `employee`, `teamlead`, `manager`, `hr_manager`, `admin`
+- **Beschreibung**: Listet alle Abwesenheiten des aktuellen Nutzers auf.
 
 ### `POST /api/absences`
-Creates a new absence request.
-- **Auth**: `employee`+
-- **Body**:
-  ```json
-  {
-    "type": "vacation | sick | training | parental",
-    "startDate": "2024-01-01",
-    "endDate": "2024-01-05",
-    "isHalfDay": false,
-    "reason": "Optional description",
-    "substitute": { "email": "..." }
-  }
-  ```
+- **Rollen**: `employee`, `teamlead`, `manager`, `hr_manager`, `admin`
+- **Beschreibung**: Erstellt einen neuen Abwesenheitsantrag.
+- **Body**: `{ type: string, startDate: Date, endDate: Date, reason: string, substitute?: object }`
+
+### `GET /api/absences/[id]`
+- **Rollen**: `employee`, `teamlead`, `manager`, `hr_manager`, `admin`
+- **Beschreibung**: Abrufen von Details einer spezifischen Abwesenheit (mit Ownership-Prüfung).
+
+### `DELETE /api/absences/[id]`
+- **Rollen**: `employee`, `admin`
+- **Beschreibung**: Storniert eine Abwesenheit. Rückerstattung der Urlaubstage erfolgt automatisch.
+
+![Stornierungs-Prozess](./diagrams/cancellation-refund.svg)
 
 ---
 
-## Approvals
+## ✅ Genehmigungen (Approvals)
 
-### `POST /api/approvals/{id}/approve`
-Approves an absence request.
-- **Auth**: `manager`, `teamlead`, `hr_manager`, `admin`
-- **Side Effects**:
-  - Updates vacation balance.
-  - Creates Outlook calendar event.
-  - Sets Outlook auto-reply.
-  - Sends Teams notifications.
+### `GET /api/approvals`
+- **Rollen**: `manager`, `hr_manager`, `admin`
+- **Beschreibung**: Listet ausstehende Anträge zur Genehmigung auf.
 
-### `POST /api/approvals/{id}/reject`
-Rejects an absence request.
-- **Auth**: `manager`, `teamlead`, `hr_manager`, `admin`
-- **Body**: `{ "reason": "Reason for rejection" }`
+### `POST /api/approvals/[id]/approve`
+- **Rollen**: `manager`, `admin`
+- **Beschreibung**: Genehmigt einen Antrag und löst Folgeaktionen aus (Outlook, Teams).
+
+![Genehmigungs-Prozess](./diagrams/approval-flow.svg)
 
 ---
 
-## Users & Profiles
+## 🛠️ Administration & Benutzer
 
-### `GET /api/profile`
-Returns the profile of the currently logged-in user.
-- **Auth**: `employee`+
-
-### `GET /api/users`
-Returns a list of all users (paginated).
-- **Auth**: `hr_manager`, `admin`
-
----
-
-## Admin & Settings
-
-### `GET /api/settings/company`
-Returns company-wide settings (e.g., default vacation days).
-- **Auth**: `admin`
+### `GET /api/admin/users`
+- **Rollen**: `hr_manager`, `admin`
+- **Beschreibung**: Listet alle im System registrierten Benutzer auf.
 
 ### `POST /api/admin/users/sync`
-Triggers a manual sync with Entra ID or Personio.
-- **Auth**: `admin`
+- **Rollen**: `admin`
+- **Beschreibung**: Manuelle Synchronisation von Benutzern aus dem Azure Entra ID.
+
+---
+
+## 📊 Analytics & Insights
+
+### `GET /api/analytics/summary`
+- **Rollen**: `hr_manager`, `admin`
+- **Beschreibung**: Dashboard-Statistiken über Urlaubsverteilung und Auslastung.
+
+### `GET /api/insights/suggestions`
+- **Rollen**: `employee`, `teamlead`, `manager`, `hr_manager`, `admin`
+- **Beschreibung**: Liefert Vorschläge für Brückentage und optimale Urlaubsplanung.
+
+---
+
+## 🔄 Integrationen & Cron Jobs
+
+### `GET /api/cron/return-prompts`
+- **Auth**: `Bearer ${CRON_SECRET}`
+- **Beschreibung**: Sendet Rückkehr-Prompts an Mitarbeiter nach dem Urlaub.
+
+### `POST /api/cron/personio-sync`
+- **Auth**: `Bearer ${CRON_SECRET}`
+- **Beschreibung**: Synchronisiert genehmigte Abwesenheiten mit dem Personio API.
+
+![Personio Synchronisation](./diagrams/personio-sync.svg)

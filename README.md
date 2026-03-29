@@ -7,16 +7,19 @@ A modern, enterprise-grade solution for managing employee absences, holiday requ
 ---
 
 ## 🌟 Key Features
-- **SSO Authentication**: Sign in with Microsoft Entra ID (Azure AD).
-- **Holiday Requests**: Simple, intuitive flow for creating and managing vacation requests.
-- **Manager Approval**: Managers receive real-time notifications in Microsoft Teams with Adaptive Cards.
-- **M365 Integration**:
-  - Automatic **Outlook Calendar** events upon approval.
-  - Automatic **Outlook Auto-Replies** (Out-of-office) setup.
+- **Smart Engine**: Visual **Jahresplaner** for optimal team coverage.
+- **Vacation Suggestions**: Pro-active suggestions for bridge days and holiday optimization.
+- **Conflict Warning**: Automatic detection of overlapping absences or low department capacity.
+- **SSO Authentication**: Secure sign-in with Microsoft Entra ID (Azure AD).
+- **Holiday Requests**: Intuitive UI for creating, managing, and canceling requests.
+- **Manager Approval**: Real-time Teams notifications with Interactive Adaptive Cards.
+- **M365 Automation**:
+  - Automatic **Outlook Calendar** sync on approval.
+  - Automatic **Outlook Out-of-office** (Auto-Reply) setup.
   - **Teams Bot** notifications for approvals and handovers.
-- **Handover Management**: Detailed task handover for substitutes, integrated into the request flow.
-- **Enterprise RBAC**: Granular roles (Employee, Team Lead, Manager, HR Manager, Admin).
-- **External Sync**: Two-way synchronization with **Personio** (optional).
+- **Handover Management**: Integrated task handover with automated return prompts.
+- **Enterprise RBAC**: Fine-grained 5-role system (Employee, Team Lead, Manager, HR Manager, Admin).
+- **External Sync**: Native two-way synchronization with **Personio** (Optional).
 
 ---
 

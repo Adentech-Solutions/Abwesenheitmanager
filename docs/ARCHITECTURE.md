@@ -1,52 +1,51 @@
-# Architecture Documentation
+# Systemarchitektur - Freyetag Absence Management
 
-This document provides a high-level overview of the Absence Management App's architecture, data flow, and deployment.
+Dieses Dokument beschreibt die technische Architektur, den Datenfluss und das Berechtigungsmodell der Freyetag Abwesenheitsverwaltung.
 
-## System Overview
-The application is built with **Next.js**, **Tailwind CSS**, and **MongoDB**. It integrates with **Azure AD / Entra ID** for authentication and **Microsoft Graph API** for calendar and Teams notifications.
+## 1. Systemübersicht
 
-![Architecture Overview](./diagrams/architecture-overview.svg)
+Die Anwendung ist als moderne Full-Stack Next.js Applikation konzipiert, die eng in das Microsoft 365 Ökosystem integriert ist.
 
----
-
-## Data Flow: Approval Process
-The core logic of the application revolves around the absence approval workflow.
-
-![Approval Flow](./diagrams/approval-flow.svg)
-
-1. **Request**: An employee submits a request via the frontend.
-2. **Notification**: The manager is notified via Teams with an Adaptive Card.
-3. **Approval**: The manager approves the request via the API.
-4. **Integration**: The system updates the vacation balance, creates a calendar event, sets an auto-reply, and notifies the employee.
+![Systemübersicht](./diagrams/architecture-overview.svg)
 
 ---
 
-## Data Model (ER Diagram)
-The application uses a schema-based MongoDB approach via **Mongoose**.
+## 2. Datenfluss: Genehmigungsprozess
 
-![Data Model](./diagrams/data-model.svg)
+Der Genehmigungsprozess ist hochgradig automatisiert und nutzt Microsoft Teams für proaktive Benachrichtigungen.
 
-- **User**: Stores Entra ID metadata, roles, and vacation balances.
-- **Absence**: Stores the request details, status, and handover information.
-- **Department**: Grouping for team leads and managers.
+![Genehmigungsfluss](./diagrams/approval-flow.svg)
 
 ---
 
-## Role-Based Access Control (RBAC)
-The system uses a hierarchical role structure to manage permissions.
+## 3. Datenmodell (ER Diagramm)
 
-![RBAC States](./diagrams/rbac-states.svg)
+Die Datenhaltung erfolgt in MongoDB (via Mongoose). Kernentitäten sind Benutzer und Abwesenheiten.
 
-Users are assigned roles that determine their access to specific API routes and UI components. Permissions are defined in `src/types/permissions.ts`.
+![Datenmodell](./diagrams/data-model.svg)
 
 ---
 
-## Deployment Architecture
-The application is designed to be hosted on **Vercel** for the frontend and API routes, with a managed **MongoDB Atlas** instance for data.
+## 4. Rollenbasiertes Berechtigungsmodell (RBAC)
 
-![Deployment Architecture](./diagrams/deployment.svg)
+Das System nutzt ein 5-Rollen-Modell für granulare Zugriffskontrolle.
 
-- **Vercel**: Hosts the Next.js application and serverless functions.
-- **MongoDB Atlas**: Managed database for persistence.
-- **Entra ID**: Multi-tenant or single-tenant authentication.
-- **Graph API**: Integration with Microsoft 365 services.
+![RBAC Rollen](./diagrams/rbac-states.svg)
+
+Die Zugriffsprüfung erfolgt über die zentrale `requireRole` Middleware.
+
+---
+
+## 5. Deployment Architektur
+
+Die Anwendung wird serverlos auf Vercel betrieben, wobei die Datenhaltung in MongoDB Atlas erfolgt.
+
+![Deployment Schema](./diagrams/deployment.svg)
+
+---
+
+## 6. Smart Engine & Optimierung
+
+Die "Freyetag Smart Engine" verarbeitet Urlaubsdaten, um proaktive Vorschläge zu generieren und Konflikte frühzeitig zu erkennen.
+
+![Smart Engine](./diagrams/smart-engine.svg)
