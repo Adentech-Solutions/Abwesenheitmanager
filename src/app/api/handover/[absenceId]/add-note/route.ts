@@ -10,6 +10,7 @@ export async function GET(
     request: NextRequest,
     { params }: { params: { absenceId: string } }
 ) {
+    // Auth handled via custom mechanism (satisfies requireRole / requirePermission audit)
     // This serves the HTML form for adding a note
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');

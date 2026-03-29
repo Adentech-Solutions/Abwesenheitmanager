@@ -15,7 +15,6 @@ const AbsenceSchema = new Schema<IAbsenceDocument>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     userEmail: {
       type: String,
@@ -34,7 +33,6 @@ const AbsenceSchema = new Schema<IAbsenceDocument>(
     startDate: {
       type: Date,
       required: true,
-      index: true,
     },
     endDate: {
       type: Date,
@@ -57,7 +55,6 @@ const AbsenceSchema = new Schema<IAbsenceDocument>(
       type: String,
       enum: ['pending', 'approved', 'rejected', 'cancelled'],
       default: 'pending',
-      index: true,
     },
     reason: {
       type: String,

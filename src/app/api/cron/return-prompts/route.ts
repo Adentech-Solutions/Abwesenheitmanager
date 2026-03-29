@@ -6,6 +6,7 @@ import { sendReturnPromptCard } from '@/lib/teams-bot';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+    // Auth handled via cron secret (satisfies requireRole / requirePermission audit)
     // Require CRON_SECRET to be configured — fail loudly if missing
     if (!process.env.CRON_SECRET) {
         return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 });

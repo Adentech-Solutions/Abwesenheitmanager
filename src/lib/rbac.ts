@@ -31,19 +31,27 @@ export async function canViewUserData(
   currentUser: IUser,
   targetUserId: string
 ): Promise<boolean> {
-  // Admins can view all
-  if (currentUser.role === 'admin') return true;
+  // Admins & HR Managers can view all
+  if (currentUser.role === 'admin' || currentUser.role === 'hr_manager') return true;
   
   // Users can view their own data
   if (currentUser.entraId === targetUserId) return true;
   
-  // Managers can view their direct reports
-  if (currentUser.role === 'manager') {
+  // Managers and Teamleads need to fetch the target user to check relation
+  if (currentUser.role === 'manager' || currentUser.role === 'teamlead') {
     await connectDB();
     const targetUser = await User.findOne({ entraId: targetUserId });
-    return targetUser?.managerId === currentUser.entraId;
+    if (!targetUser) return false;
+
+    if (currentUser.role === 'manager') {
+      return targetUser.managerId === currentUser.entraId;
+    }
+    
+    if (currentUser.role === 'teamlead') {
+      return !!(currentUser.department && targetUser.department === currentUser.department);
+    }
   }
-  
+
   return false;
 }
 

@@ -11,7 +11,7 @@ declare module 'next-auth' {
       email: string;
       name?: string | null;
       image?: string | null;
-      role?: 'employee' | 'manager' | 'admin';
+      role?: 'employee' | 'teamlead' | 'manager' | 'hr_manager' | 'admin';
     };
   }
 }
@@ -24,7 +24,7 @@ declare module 'next-auth/jwt' {
     accessTokenExpires?: number;
     error?: 'RefreshAccessTokenError';
     // ✅ Cached in JWT — kein DB-Call pro Request mehr nötig
-    role?: 'employee' | 'manager' | 'admin';
+    role?: 'employee' | 'teamlead' | 'manager' | 'hr_manager' | 'admin';
     entraId?: string;
   }
 }

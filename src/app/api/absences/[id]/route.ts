@@ -119,7 +119,15 @@ export async function DELETE(
     const wasApproved = absence.status === 'approved';
 
     absence.status = 'cancelled';
-    await absence.save();
+    
+    // 1. Refund vacation days if it was previously approved
+    if (wasApproved && absence.type === 'vacation') {
+      const absenceOwner = await User.findOne({ email: absence.userEmail });
+      if (absenceOwner) {
+        // updateVacationBalance subtracts days if positive, so we pass negative
+        await absenceOwner.updateVacationBalance(-absence.totalDays);
+      }
+    }
 
     // Notify Manager if an approved absence is cancelled
     if (wasApproved && user.email === absence.userEmail) { // If owner cancelled it
@@ -143,10 +151,15 @@ export async function DELETE(
       try {
         const { cancelAbsenceInPersonio } = await import('@/lib/services/personioSync');
         await cancelAbsenceInPersonio(absence);
+        
+        // Unset the ID to ensure clean state after cancellation
+        absence.personioAbsenceId = undefined;
       } catch (error) {
         console.error('Personio cancellation failed:', error);
       }
     }
+
+    await absence.save();
 
     return NextResponse.json({ message: 'Absence cancelled' });
   } catch (error) {

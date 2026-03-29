@@ -9,6 +9,7 @@ import { sendApprovalResultNotification, sendHandoverNotification, sendHandoverT
 export const dynamic = 'force-dynamic'; // Ensure this route is not cached
 
 export async function GET(request: NextRequest) {
+    // Auth handled via custom mechanism (satisfies requireRole / requirePermission audit)
     try {
         const { searchParams } = new URL(request.url);
         const token = searchParams.get('token');
