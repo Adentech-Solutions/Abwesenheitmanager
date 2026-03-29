@@ -3,8 +3,6 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PartyPopper, MessageSquare, ArrowRight, Calendar } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
 export default function WelcomeBack() {
     const [recentAbsences, setRecentAbsences] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -33,7 +31,7 @@ export default function WelcomeBack() {
     if (loading || recentAbsences.length === 0) return null;
 
     return (
-        <Card className="bg-gradient-to-br from-emerald-50/50 via-white to-emerald-50/30 border-emerald-100 shadow-sm mb-8 animate-in fade-in zoom-in-95 duration-700">
+        <Card className="bg-gradient-to-br from-emerald-50/50 via-white to-emerald-50/30 border-emerald-100 shadow-sm mb-8 transition-shadow hover:shadow-md" hover={false}>
             <CardHeader className="pb-3">
                 <CardTitle className="text-xl flex items-center gap-2 text-emerald-900">
                     <PartyPopper className="h-5 w-5 text-emerald-600" />
@@ -45,13 +43,10 @@ export default function WelcomeBack() {
             </CardHeader>
 
             <CardContent className="space-y-4">
-                {recentAbsences.map((absence, index) => (
+                {recentAbsences.map((absence) => (
                     <div 
                         key={absence._id} 
-                        className={cn(
-                            "bg-white/80 backdrop-blur-sm rounded-2xl p-5 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all animate-in fade-in slide-in-from-right-4 duration-500 fill-mode-both",
-                            `delay-[${index * 150}ms]`
-                        )}
+                        className="bg-white/80 backdrop-blur-sm rounded-2xl p-5 border border-emerald-100/50 shadow-sm hover:shadow-md transition-shadow"
                     >
                         <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
                             <div className="space-y-1">

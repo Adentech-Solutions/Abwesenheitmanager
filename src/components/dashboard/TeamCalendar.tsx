@@ -129,13 +129,10 @@ export default function TeamOverview() {
           </div>
         ) : (
           <div className="space-y-3">
-            {absentToday.map((absence: any, index: number) => (
+            {absentToday.map((absence: any) => (
               <div
                 key={absence.userId}
-                className={cn(
-                  "group flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-white hover:border-primary-100 hover:bg-primary-50/10 transition-all animate-in fade-in slide-in-from-right-4 duration-500 fill-mode-both",
-                  `delay-[${index * 100}ms]`
-                )}
+                className="group flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-white hover:border-primary-100 hover:bg-primary-50/10 transition-shadow hover:shadow-sm"
               >
                 <div className="flex items-center gap-4">
                   <Avatar className="h-10 w-10 border-2 border-white shadow-sm transition-transform group-hover:scale-105">

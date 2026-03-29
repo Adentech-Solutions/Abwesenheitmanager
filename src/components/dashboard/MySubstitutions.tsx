@@ -23,7 +23,7 @@ export default function MySubstitutions() {
 
     if (loading) {
         return (
-            <Card className="bg-primary-50/30 border-primary-100 shadow-none">
+            <Card className="bg-primary-50/30 border-primary-100 shadow-none" hover={false}>
                 <CardHeader className="pb-2">
                     <Skeleton className="h-6 w-48" />
                 </CardHeader>
@@ -37,7 +37,7 @@ export default function MySubstitutions() {
     if (active.length === 0) return null;
 
     return (
-        <Card className="bg-gradient-to-br from-primary-50/50 via-white to-primary-50/30 border-primary-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <Card className="bg-gradient-to-br from-primary-50/50 via-white to-primary-50/30 border-primary-100 shadow-sm overflow-hidden transition-shadow hover:shadow-md" hover={false}>
             <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                     <CardTitle className="text-xl flex items-center gap-2 text-primary-900">
@@ -54,7 +54,7 @@ export default function MySubstitutions() {
             </CardHeader>
 
             <CardContent className="space-y-4">
-                {active.map((sub, index) => {
+                {active.map((sub) => {
                     const completedTasks = sub.handover?.items?.filter((i: any) => i.status === 'done').length || 0;
                     const totalTasks = sub.handover?.items?.length || 0;
                     const isFullyCompleted = completedTasks === totalTasks && totalTasks > 0;
@@ -62,10 +62,7 @@ export default function MySubstitutions() {
                     return (
                         <div 
                             key={sub._id} 
-                            className={cn(
-                                "group bg-white/90 backdrop-blur-sm rounded-2xl p-4 border border-primary-100/50 shadow-sm hover:shadow-md hover:border-primary-300 transition-all animate-in fade-in zoom-in-95 duration-500 fill-mode-both",
-                                `delay-[${index * 150}ms]`
-                            )}
+                            className="group bg-white/90 backdrop-blur-sm rounded-2xl p-4 border border-primary-100/50 shadow-sm hover:shadow-md hover:border-primary-300 transition-shadow"
                         >
                             <div className="flex justify-between items-start mb-3">
                                 <div>
@@ -82,7 +79,7 @@ export default function MySubstitutions() {
                                 <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg group/btn">
                                     <Link href={`/handover/${sub._id}`} className="flex items-center gap-1.5 text-xs font-bold">
                                         Tracker
-                                        <ExternalLink className="h-3 w-3 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform" />
+                                        <ExternalLink className="h-3 w-3 group-hover/btn:translate-x-0.5 transition-transform" />
                                     </Link>
                                 </Button>
                             </div>

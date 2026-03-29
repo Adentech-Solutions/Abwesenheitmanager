@@ -73,7 +73,7 @@ function getEasterDate(year: number): Date {
   return new Date(year, month, day);
 }
 
-export default function UpcomingAbsences() {
+export default function UpcomingAbsences({ className }: { className?: string }) {
   // Fetch user absences
   const { data: stats, isLoading: absencesLoading } = useQuery({
     queryKey: ['absences', 'stats'],
@@ -131,12 +131,12 @@ export default function UpcomingAbsences() {
 
   if (absencesLoading || settingsLoading) {
     return (
-      <Card>
+      <Card className={cn("flex flex-col", className)}>
         <CardHeader>
           <Skeleton className="h-6 w-40" />
           <Skeleton className="h-4 w-56 mt-2" />
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="flex-1 space-y-4">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-20 w-full rounded-xl" />
           ))}
@@ -146,7 +146,7 @@ export default function UpcomingAbsences() {
   }
 
   return (
-    <Card>
+    <Card className={cn("flex flex-col", className)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-xl flex items-center gap-2">
           <CalendarDays className="h-5 w-5 text-primary-600" />
@@ -163,13 +163,10 @@ export default function UpcomingAbsences() {
           <div className="space-y-4">
             <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-widest px-1">Deine Anträge</h4>
             <div className="space-y-3">
-              {upcomingAbsences.map((absence: any, index: number) => (
+              {upcomingAbsences.map((absence: any) => (
                 <div
                   key={absence._id}
-                  className={cn(
-                    "flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-white hover:border-primary-100 hover:bg-primary-50/10 transition-all group animate-in fade-in slide-in-from-right-4 duration-500 fill-mode-both",
-                    `delay-[${index * 100}ms]`
-                  )}
+                  className="flex items-center justify-between p-4 rounded-xl border border-gray-100 bg-white hover:border-primary-100 hover:bg-primary-50/10 transition-shadow hover:shadow-sm group"
                 >
                   <div className="flex items-center gap-4">
                     <div className="h-10 w-10 rounded-xl bg-gray-50 flex items-center justify-center group-hover:bg-primary-50 transition-colors">
@@ -221,7 +218,7 @@ export default function UpcomingAbsences() {
               {upcomingHolidays.map((holiday, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-3.5 rounded-xl bg-amber-50/50 border border-amber-100/50 hover:bg-amber-50 transition-colors animate-in fade-in slide-in-from-right-4 duration-500 fill-mode-both delay-300"
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-amber-50/50 border border-amber-100/50 hover:bg-amber-50 transition-colors"
                 >
                   <div className="flex items-center gap-4">
                     <div className="h-9 w-9 rounded-lg bg-amber-100/50 flex items-center justify-center">

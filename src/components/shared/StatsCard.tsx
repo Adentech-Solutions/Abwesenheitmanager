@@ -23,14 +23,14 @@ export default function StatsCard({
   icon: Icon,
   color,
   bgColor,
-  delay = 'delay-0',
+  delay: _delay = 'delay-0',
   className,
 }: StatsCardProps) {
   return (
     <Card 
+      hover={false}
       className={cn(
-        "p-6 animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both hover:shadow-md hover:-translate-y-0.5 transition-all",
-        delay,
+        "p-6 border-gray-100 shadow-sm transition-shadow hover:shadow-md",
         className
       )}
     >

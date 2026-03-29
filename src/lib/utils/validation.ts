@@ -21,11 +21,17 @@ const autoReplySettingsSchema = z.object({
 }).optional();
 
 // Substitute Schema
-const substituteSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1).max(100).optional(),
-  tasks: z.string().max(1000).optional(),
-}).optional();
+const substituteSchema = z.preprocess(
+  (val: any) => {
+    if (!val || !val.email || val.email.trim() === '') return undefined;
+    return val;
+  },
+  z.object({
+    email: z.string().email(),
+    name: z.string().min(1).max(100).optional(),
+    tasks: z.string().max(1000).optional(),
+  }).optional()
+);
 
 // Handover Item Link Schema
 const handoverLinkSchema = z.object({

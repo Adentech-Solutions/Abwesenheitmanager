@@ -1,10 +1,10 @@
 // src/app/api/vacation-suggestions/route.ts
 
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/rbac';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
-import User from '@/models/User';
 import Department from '@/models/Department';
 import CompanySettings from '@/models/CompanySettings';
 import { getVacationSuggestions } from '@/lib/services/vacationOptimizer';
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       state,
       remainingDays,
       existingAbsences: absences.map((a) => ({ startDate: a.startDate, endDate: a.endDate })),
-      maxResults: 10,
+      maxResults: 50,
     });
 
     return NextResponse.json({ suggestions });

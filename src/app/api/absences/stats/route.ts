@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
         total: totalAbsences,
         pending: pendingAbsences,
         approved: approvedAbsences,
-        vacationDays: user.vacationDays,
+        vacationDays: dbUser.vacationDays,
       },
       upcomingAbsences,
     });

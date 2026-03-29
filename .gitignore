@@ -31,6 +31,9 @@ yarn-error.log*
 *.swo
 *~
 
+#AI Agents
+.cursor/
+
 # OS
 .DS_Store
 Thumbs.db

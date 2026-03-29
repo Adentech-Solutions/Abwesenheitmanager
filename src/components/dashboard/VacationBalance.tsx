@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from "@/lib/utils"
 import { Calendar, AlertCircle, CheckCircle2 } from 'lucide-react';
 
-export default function VacationBalance() {
+export default function VacationBalance({ className }: { className?: string }) {
   const { data: stats, isLoading } = useQuery({
     queryKey: ['absences', 'stats'],
     queryFn: async () => {
@@ -23,12 +23,12 @@ export default function VacationBalance() {
 
   if (isLoading) {
     return (
-      <Card className="h-full">
+      <Card className={cn("flex flex-col", className)}>
         <CardHeader>
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-4 w-48 mt-2" />
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="flex-1 space-y-6">
           <Skeleton className="h-2 w-full" />
           <div className="grid grid-cols-3 gap-4">
             <Skeleton className="h-12 w-full" />
@@ -41,7 +41,7 @@ export default function VacationBalance() {
   }
 
   return (
-    <Card className="h-full">
+    <Card className={cn("flex flex-col", className)}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl flex items-center gap-2">
@@ -91,21 +91,21 @@ export default function VacationBalance() {
         {/* Contextual Alerts */}
         <div className="pt-2">
           {percentage < 30 ? (
-            <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-3 flex gap-3 items-start animate-in fade-in zoom-in-95 duration-500">
+            <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-3 flex gap-3 items-start">
               <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-sm text-amber-800 leading-relaxed font-medium">
                 Nur noch {vacationDays?.remaining || 0} Tage verfügbar! Plane deinen Urlaub rechtzeitig.
               </p>
             </div>
           ) : percentage > 70 ? (
-            <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 flex gap-3 items-start animate-in fade-in zoom-in-95 duration-500">
+            <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 flex gap-3 items-start">
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
               <p className="text-sm text-emerald-800 leading-relaxed font-medium">
                 Du hast noch viele Urlaubstage übrig. Zeit für eine Auszeit!
               </p>
             </div>
           ) : (
-            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 flex gap-3 items-start animate-in fade-in zoom-in-95 duration-500">
+            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 flex gap-3 items-start">
               <Calendar className="h-5 w-5 text-primary-600 shrink-0 mt-0.5" />
               <p className="text-sm text-primary-800 leading-relaxed font-medium">
                 Dein Urlaubskonto ist gut ausgeglichen. Weiter so!
