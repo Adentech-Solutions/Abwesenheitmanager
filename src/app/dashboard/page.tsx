@@ -11,6 +11,10 @@ import TeamOverview from '@/components/dashboard/TeamCalendar';
 import MySubstitutions from '@/components/dashboard/MySubstitutions';
 import WelcomeBack from '@/components/dashboard/WelcomeBack';
 import VacationSuggestions from '@/components/dashboard/VacationSuggestions';
+import SmartSuggestions from '@/components/dashboard/SmartSuggestions';
+
+const USE_SMART_SUGGESTIONS = true;
+
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -45,9 +49,14 @@ export default function DashboardPage() {
             <YearPlannerWidget className="h-full" />
           </div>
           <div className="lg:col-span-2">
-            <VacationSuggestions className="h-full" />
+            {USE_SMART_SUGGESTIONS ? (
+              <SmartSuggestions className="h-full" />
+            ) : (
+              <VacationSuggestions className="h-full" />
+            )}
           </div>
         </div>
+
 
         {/* Third Row: Substitutions (if any) */}
         <MySubstitutions />

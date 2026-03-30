@@ -535,3 +535,27 @@ export async function getEntraUsers() {
     throw error;
   }
 }
+
+// 🆕 HELPER: Get Calendar Events for a user
+export async function getCalendarEvents(
+  userId: string,
+  startDateTime: string,
+  endDateTime: string
+) {
+  try {
+    const result = await graphClient
+      .api(`/users/${userId}/calendarView`)
+      .query({
+        startDateTime,
+        endDateTime,
+      })
+      .select('id,subject,start,end,isAllDay,showAs,sensitivity,attendees')
+      .get();
+
+    return result.value || [];
+  } catch (error: any) {
+    console.error('❌ Error fetching calendar events:', error);
+    // Return empty array instead of throwing to keep the engine resilient
+    return [];
+  }
+}
