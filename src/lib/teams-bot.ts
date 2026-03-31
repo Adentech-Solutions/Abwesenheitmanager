@@ -180,8 +180,8 @@ export async function sendApprovalNotification(
 
   const card = createAbsenceRequestCard({
     ...absenceDetails,
-    approveUrl: `${APP_URL}/api/absences/${absenceDetails.id}/approve?token=${approveToken}`,
-    rejectUrl: `${APP_URL}/api/absences/${absenceDetails.id}/reject?token=${rejectToken}`,
+    approveUrl: `${APP_URL}/api/approvals/quick?token=${approveToken}`,
+    rejectUrl: `${APP_URL}/api/approvals/quick?token=${rejectToken}`,
     dashboardUrl: `${APP_URL}/dashboard`,
   });
 

@@ -15,8 +15,11 @@ const autoReplySettingsSchema = z.object({
   }).optional(),
   timing: z.object({
     activateImmediately: z.boolean().optional().default(false),
+    useCustomTiming: z.boolean().optional().default(false),
     scheduledDate: z.string().or(z.date()).optional(),
     scheduledTime: z.string().regex(/^\d{2}:\d{2}$/).optional().default('00:00'),
+    scheduledEndDate: z.string().or(z.date()).optional(),
+    scheduledEndTime: z.string().regex(/^\d{2}:\d{2}$/).optional().default('23:59'),
   }).optional(),
 }).optional();
 

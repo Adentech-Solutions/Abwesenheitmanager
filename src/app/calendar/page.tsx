@@ -22,6 +22,7 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { getGermanHolidays, GermanState } from '@/lib/utils/holidays';
 
 // ── Inline Department Filter ──────────────────────────────────────────────
 function getDeptColor(name: string) {
@@ -158,6 +159,15 @@ export default function CalendarPage() {
     enabled: isManagerOrAdmin,
   });
 
+  const { data: companySettings } = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/company');
+      if (!res.ok) throw new Error('Failed to fetch company settings');
+      return res.json();
+    },
+  });
+
   const { data: absencesData, isLoading } = useQuery({
     queryKey: ['calendar', 'absences', format(currentDate, 'yyyy-MM'), selectedDepartment],
     queryFn: async () => {
@@ -183,6 +193,19 @@ export default function CalendarPage() {
   const calendarStart = startOfWeek(monthStart, { locale: de });
   const calendarEnd = endOfWeek(monthEnd, { locale: de });
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+
+  // Calculate holidays for the current month
+  const userState = (companySettings?.settings?.state as GermanState) || 'BY'; // Default to Bavaria
+  const year = currentDate.getFullYear();
+  const allHolidays = getGermanHolidays(year, userState);
+  const monthHolidays = allHolidays.filter(holiday => 
+    holiday.date >= calendarStart && holiday.date <= calendarEnd
+  );
+
+  const getHolidayForDay = (day: Date) => 
+    monthHolidays.find(holiday => 
+      format(holiday.date, 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')
+    );
 
   const getInitials = (name: string) =>
     name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -285,6 +308,7 @@ export default function CalendarPage() {
                   <div className="grid grid-cols-7 gap-px bg-gray-100 auto-rows-fr">
                     {calendarDays.map((day, idx) => {
                       const dayAbsences = getAbsencesForDay(day);
+                      const dayHoliday = getHolidayForDay(day);
                       const isCurrentMonth = isSameMonth(day, currentDate);
                       const isTodayDate = isToday(day);
                       const isWeekendDay = isWeekend(day);
@@ -297,9 +321,11 @@ export default function CalendarPage() {
                             !isCurrentMonth && 'bg-gray-50/80',
                             isTodayDate && 'bg-primary-50/20',
                             isWeekendDay && !isTodayDate && !isCurrentMonth && 'bg-gray-100/50',
+                            dayHoliday && 'bg-primary-50/50',
                             "animate-in fade-in duration-500 fill-mode-both",
                             `delay-[${Math.min(idx * 5, 200)}ms]`
                           )}
+                          title={dayHoliday ? dayHoliday.name : undefined}
                         >
                           <div className={cn(
                             "inline-flex items-center justify-center w-7 h-7 text-xs font-bold rounded-xl mb-2 transition-all shadow-sm",
@@ -328,6 +354,16 @@ export default function CalendarPage() {
                             {dayAbsences.length > 3 && (
                               <div className="text-[10px] font-bold text-gray-400 px-2 py-0.5 bg-gray-50 rounded-lg inline-block">
                                 +{dayAbsences.length - 3} weitere
+                              </div>
+                            )}
+                            
+                            {/* Holiday display - appears below absences */}
+                            {dayHoliday && (
+                              <div
+                                className="text-[9px] font-bold text-primary-700 px-2 py-1 bg-primary-100/80 rounded-lg inline-block border border-primary-200/50 truncate max-w-full"
+                                title={dayHoliday.name}
+                              >
+                                {dayHoliday.name.length > 8 ? `${dayHoliday.name.substring(0, 6)}...` : dayHoliday.name}
                               </div>
                             )}
                           </div>
@@ -359,6 +395,17 @@ export default function CalendarPage() {
                     </Badge>
                   </div>
                 ))}
+                
+                {/* Holiday Legend */}
+                <div className="flex items-center justify-between group cursor-default pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary-400 shadow-sm group-hover:scale-125 transition-transform" />
+                    <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">Feiertag</span>
+                  </div>
+                  <Badge variant="default" className="h-4 px-1.5 text-[9px] font-bold uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity bg-primary-100 text-primary-700 border-primary-200">
+                    {userState}
+                  </Badge>
+                </div>
               </div>
             </Card>
 

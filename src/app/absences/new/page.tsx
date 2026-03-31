@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import Card from '@/components/ui/Card';
@@ -19,6 +19,9 @@ import {
 import { cn } from '@/lib/utils';
 import { format, differenceInDays, isSameDay } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { Inter } from 'next/font/google';
+
+const inter = Inter({ subsets: ['latin'] });
 
 // ─────────────────────────────────────────────
 // TYPES
@@ -49,33 +52,90 @@ const ABSENCE_TYPES: AbsenceType[] = [
 export default function NewAbsenceWizard() {
     const { data: session, status } = useSession();
     const router = useRouter();
+    const searchParams = useSearchParams();
     
     // Step State
     const [currentStep, setCurrentStep] = useState<Step>('details');
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Form Data
-    const [formData, setFormData] = useState({
-        type: 'vacation',
-        startDate: format(new Date(), 'yyyy-MM-dd'),
-        endDate: format(new Date(), 'yyyy-MM-dd'),
-        isHalfDay: false,
-        halfDayPeriod: 'morning' as 'morning' | 'afternoon',
-        reason: '',
-        substitute: { userId: '', email: '', name: '' },
-        handoverEnabled: false,
-        handoverItems: [] as HandoverItemInput[],
-        generalNotes: '',
-        emergencyContact: { availability: 'unavailable' } as HandoverEmergencyContact,
-        autoReplyEnabled: true,
-        autoReplySubject: 'Abwesenheitsnotiz: {name}',
-        autoReplyMessage: 'Vielen Dank für Ihre Nachricht. Ich bin von {startDate} bis {endDate} nicht im Büro. In dringenden Fällen wenden Sie sich bitte an {substituteName}.',
+    // Form Data - Initialize with URL params if available
+    const [formData, setFormData] = useState(() => {
+        const startParam = searchParams.get('start');
+        const endParam = searchParams.get('end');
+        const typeParam = searchParams.get('type');
+        
+        return {
+            type: typeParam || 'vacation',
+            startDate: startParam || format(new Date(), 'yyyy-MM-dd'),
+            endDate: endParam || format(new Date(), 'yyyy-MM-dd'),
+            isHalfDay: false,
+            halfDayPeriod: 'morning' as 'morning' | 'afternoon',
+            reason: '',
+            substitute: { userId: '', email: '', name: '' },
+            handoverEnabled: false,
+            handoverItems: [] as HandoverItemInput[],
+            generalNotes: '',
+            emergencyContact: { availability: 'unavailable' } as HandoverEmergencyContact,
+            autoReplyEnabled: true,
+            autoReplySubject: 'Abwesenheitsnotiz',
+            autoReplyMessage: '',
+            useCustomTiming: false,
+            customStartDate: startParam || format(new Date(), 'yyyy-MM-dd'),
+            customStartTime: '00:00',
+            customEndDate: endParam || format(new Date(), 'yyyy-MM-dd'),
+            customEndTime: '23:59',
+        };
     });
 
     // Auth Check
     useEffect(() => {
         if (status === 'unauthenticated') router.push('/');
     }, [status, router]);
+
+    // URL Parameter Processing (for dynamic URL changes)
+    useEffect(() => {
+        const startParam = searchParams.get('start');
+        const endParam = searchParams.get('end');
+        const typeParam = searchParams.get('type');
+
+        if (startParam || endParam || typeParam) {
+            setFormData(prev => ({
+                ...prev,
+                type: typeParam || prev.type,
+                startDate: startParam || prev.startDate,
+                endDate: endParam || prev.endDate,
+            }));
+        }
+    }, [searchParams]);
+
+    // Auto-update autoReplyMessage when dates or substitute change
+    useEffect(() => {
+        try {
+            const start = format(new Date(formData.startDate), 'dd.MM.yyyy');
+            const end = format(new Date(formData.endDate), 'dd.MM.yyyy');
+            const subText = formData.substitute.name 
+                ? `${formData.substitute.name}${formData.substitute.email ? ` (${formData.substitute.email})` : ''}`
+                : 'meine Vertretung';
+            
+            setFormData(prev => ({
+                ...prev,
+                autoReplyMessage: `Vielen Dank für Ihre Nachricht. Ich bin vom ${start} bis ${end} nicht im Büro.\nIn dringenden Fällen wenden Sie sich bitte an ${subText}.`
+            }));
+        } catch (e) {
+            // ignore date format errors if dates are invalid
+        }
+    }, [formData.startDate, formData.endDate, formData.substitute.name, formData.substitute.email]);
+
+    // Sync custom dates if not using custom timing
+    useEffect(() => {
+        if (!formData.useCustomTiming) {
+            setFormData(prev => ({
+                ...prev,
+                customStartDate: prev.startDate,
+                customEndDate: prev.endDate,
+            }));
+        }
+    }, [formData.startDate, formData.endDate, formData.useCustomTiming]);
 
     // Derived State
     const totalDays = differenceInDays(new Date(formData.endDate), new Date(formData.startDate)) + 1;
@@ -101,7 +161,33 @@ export default function NewAbsenceWizard() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    ...formData,
+                    type: formData.type,
+                    startDate: formData.startDate,
+                    endDate: formData.endDate,
+                    isHalfDay: formData.isHalfDay,
+                    halfDayPeriod: formData.halfDayPeriod,
+                    reason: formData.reason,
+                    substitute: formData.substitute.email ? formData.substitute : undefined,
+                    handover: {
+                        enabled: formData.handoverEnabled,
+                        items: formData.handoverEnabled ? formData.handoverItems : [],
+                        generalNotes: formData.handoverEnabled ? formData.generalNotes : '',
+                        emergencyContact: formData.emergencyContact,
+                    },
+                    autoReplySettings: {
+                        enabled: formData.autoReplyEnabled,
+                        hasSubstitute: !!formData.substitute.email,
+                        substituteInfo: formData.substitute.email ? formData.substitute : undefined,
+                        recipients: { internal: true, external: true },
+                        timing: {
+                            activateImmediately: false,
+                            useCustomTiming: formData.useCustomTiming,
+                            scheduledDate: formData.useCustomTiming ? new Date(formData.customStartDate).toISOString() : new Date(formData.startDate).toISOString(),
+                            scheduledTime: formData.useCustomTiming ? formData.customStartTime : '00:00',
+                            scheduledEndDate: formData.useCustomTiming ? new Date(formData.customEndDate).toISOString() : new Date(formData.endDate).toISOString(),
+                            scheduledEndTime: formData.useCustomTiming ? formData.customEndTime : '23:59',
+                        }
+                    },
                     totalDays: formData.isHalfDay ? 0.5 : totalDays,
                 }),
             });
@@ -132,7 +218,7 @@ export default function NewAbsenceWizard() {
 
     return (
         <DashboardLayout>
-            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+            <div className={cn("max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500", inter.className)}>
                 
                 {/* Wizard Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2">
@@ -227,7 +313,7 @@ export default function NewAbsenceWizard() {
                                                     <type.icon className="h-7 w-7" />
                                                 </div>
                                                 <span className={cn(
-                                                    "text-[11px] font-black uppercase tracking-widest text-center leading-tight",
+                                                    "text-[11px] font-semibold uppercase tracking-widest text-center leading-tight",
                                                     formData.type === type.id ? "text-white" : "text-gray-900"
                                                 )}>{type.label}</span>
                                             </button>
@@ -237,29 +323,29 @@ export default function NewAbsenceWizard() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div className="space-y-4">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Zeitraum Wählen</label>
+                                        <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest pl-1">Zeitraum Wählen</label>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase ml-1">Beginn</span>
+                                                <span className="text-[10px] font-medium text-gray-400 uppercase ml-1">Beginn</span>
                                                 <div className="relative group">
                                                     <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300 group-focus-within:text-primary-500 transition-colors" />
                                                     <input 
                                                         type="date" 
                                                         value={formData.startDate}
                                                         onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                                                        className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-100 font-bold text-gray-700 bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
+                                                        className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-100 font-medium text-gray-700 bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
                                                     />
                                                 </div>
                                             </div>
                                             <div className="space-y-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase ml-1">Ende</span>
+                                                <span className="text-[10px] font-medium text-gray-400 uppercase ml-1">Ende</span>
                                                 <div className="relative group">
                                                     <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300 group-focus-within:text-primary-500 transition-colors" />
                                                     <input 
                                                         type="date" 
                                                         value={formData.endDate}
                                                         onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                                                        className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-100 font-bold text-gray-700 bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
+                                                        className="w-full h-12 pl-11 pr-4 rounded-xl border border-gray-100 font-medium text-gray-700 bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
                                                     />
                                                 </div>
                                             </div>
@@ -269,7 +355,7 @@ export default function NewAbsenceWizard() {
                                                  <div className="h-8 w-8 rounded-lg bg-white border border-gray-100 flex items-center justify-center">
                                                      <Clock className="h-4 w-4 text-primary-500" />
                                                  </div>
-                                                 <span className="text-sm font-bold text-gray-700">Halber Tag</span>
+                                                 <span className="text-sm font-medium text-gray-700">Halber Tag</span>
                                              </div>
                                              <button 
                                                 onClick={() => setFormData({ ...formData, isHalfDay: !formData.isHalfDay })}
@@ -293,7 +379,7 @@ export default function NewAbsenceWizard() {
                                             onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                                             placeholder="Geben Sie hier ggf. weitere Informationen an..."
                                             rows={5}
-                                            className="w-full px-5 py-4 rounded-xl border border-gray-100 font-bold text-gray-700 bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none resize-none shadow-sm"
+                                            className="w-full px-5 py-4 rounded-xl border border-gray-100 font-medium text-gray-700 bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none resize-none shadow-sm"
                                         />
                                     </div>
                                 </div>
@@ -302,7 +388,7 @@ export default function NewAbsenceWizard() {
                                     <div className="p-2 bg-white rounded-xl text-primary-600 shadow-sm">
                                         <Calendar className="h-5 w-5" />
                                     </div>
-                                    <p className="text-sm font-black text-primary-800 uppercase tracking-tight">
+                                    <p className="text-sm font-semibold text-primary-800 uppercase tracking-tight">
                                         Gesamt: {formData.isHalfDay ? '0.5' : totalDays} {totalDays === 1 && !formData.isHalfDay ? 'Tag' : 'Tage'} Abwesenheit
                                     </p>
                                 </div>
@@ -315,8 +401,8 @@ export default function NewAbsenceWizard() {
                             <Card className="p-8 border-gray-100 shadow-sm bg-white">
                                 <div className="max-w-xl mx-auto space-y-8">
                                     <div className="text-center space-y-2">
-                                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Team-Unterstützung</h3>
-                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Wer übernimmt Ihre Aufgaben?</p>
+                                        <h3 className="text-lg font-semibold text-gray-900 uppercase tracking-tight">Team-Unterstützung</h3>
+                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Wer übernimmt Ihre Aufgaben?</p>
                                     </div>
                                     <SubstituteSearch 
                                         selectedEmail={formData.substitute.email}
@@ -383,36 +469,110 @@ export default function NewAbsenceWizard() {
                                 {formData.autoReplyEnabled && (
                                     <div className="space-y-6 pt-4 animate-in zoom-in-95">
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Betreff der Nachricht</label>
+                                            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest pl-1">Betreff der Nachricht</label>
                                             <input 
                                                 type="text" 
                                                 value={formData.autoReplySubject}
                                                 onChange={(e) => setFormData({ ...formData, autoReplySubject: e.target.value })}
-                                                className="w-full h-12 px-5 rounded-2xl border border-gray-100 font-bold text-gray-700 bg-white focus:border-primary-500 transition-all outline-none"
+                                                className="w-full h-12 px-5 rounded-2xl border border-gray-100 font-medium text-gray-700 bg-white focus:border-primary-500 transition-all outline-none"
                                             />
                                         </div>
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Inhalt der Abwesenheitsnotiz</label>
+                                            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest pl-1">Inhalt der Abwesenheitsnotiz</label>
                                             <div className="relative">
                                                 <textarea 
                                                     value={formData.autoReplyMessage}
                                                     onChange={(e) => setFormData({ ...formData, autoReplyMessage: e.target.value })}
                                                     rows={6}
-                                                    className="w-full px-5 py-4 rounded-2xl border border-gray-100 font-bold text-gray-700 bg-white focus:border-primary-500 transition-all outline-none resize-none"
+                                                    className="w-full px-5 py-4 rounded-2xl border border-gray-100 font-medium text-gray-700 bg-white focus:border-primary-500 transition-all outline-none resize-none"
                                                 />
-                                                <div className="absolute bottom-4 right-4 bg-gray-50/50 p-2 rounded-lg border border-gray-100 backdrop-blur-sm">
-                                                    <RefreshCcw 
-                                                        className="h-4 w-4 text-primary-500 cursor-pointer hover:rotate-180 transition-transform duration-500" 
-                                                        onClick={() => setFormData({ ...formData, autoReplyMessage: `Vielen Dank für Ihre Nachricht. Ich bin von ${format(new Date(formData.startDate), 'dd.MM.yyyy')} bis ${format(new Date(formData.endDate), 'dd.MM.yyyy')} nicht im Büro. In dringenden Fällen wenden Sie sich bitte an ${formData.substitute.name || 'meine Vertretung'}.` })}
-                                                    />
-                                                </div>
                                             </div>
                                         </div>
-                                        <div className="p-4 bg-primary-50/30 rounded-2xl border border-primary-100 flex items-start gap-4">
-                                            <Info className="h-5 w-5 text-primary-500 shrink-0 mt-0.5" />
-                                            <p className="text-[10px] font-bold text-primary-800 leading-relaxed uppercase tracking-tight">
-                                                Platzhalter wie <span className="underline">{'{startDate}'}</span>, <span className="underline">{'{endDate}'}</span> und <span className="underline">{'{substituteName}'}</span> werden beim Versenden automatisch durch Ihre aktuellen Daten ersetzt.
-                                            </p>
+
+                                        {/* Zeitplanung Sektion */}
+                                        <div className="pt-2">
+                                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 pl-1 flex items-center gap-2">
+                                                <div className="h-1.5 w-1.5 rounded-full bg-primary-500" />
+                                                Zeitplanung
+                                            </h4>
+                                            <div className="space-y-4">
+                                                <label className="flex items-center group cursor-pointer">
+                                                    <input
+                                                        type="radio"
+                                                        checked={!formData.useCustomTiming}
+                                                        onChange={() => setFormData({ ...formData, useCustomTiming: false })}
+                                                        className="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500 cursor-pointer"
+                                                    />
+                                                    <span className="ml-3 text-sm text-gray-700 font-medium group-hover:text-primary-600 transition-colors">
+                                                        Automatisch (Start/Ende der Abwesenheit)
+                                                    </span>
+                                                </label>
+
+                                                <label className="flex items-center group cursor-pointer">
+                                                    <input
+                                                        type="radio"
+                                                        checked={formData.useCustomTiming}
+                                                        onChange={() => setFormData({ ...formData, useCustomTiming: true })}
+                                                        className="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500 cursor-pointer"
+                                                    />
+                                                    <span className="ml-3 text-sm text-gray-700 font-medium group-hover:text-primary-600 transition-colors">
+                                                        Benutzerdefiniert
+                                                    </span>
+                                                </label>
+
+                                                {formData.useCustomTiming && (
+                                                    <div className="ml-7 mt-3 p-5 bg-gray-50/50 rounded-2xl border border-gray-100 animate-in zoom-in-95 duration-300 space-y-5 shadow-sm">
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="space-y-2">
+                                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                                                                    Start-Datum
+                                                                </label>
+                                                                <input
+                                                                    type="date"
+                                                                    value={formData.customStartDate}
+                                                                    onChange={(e) => setFormData({ ...formData, customStartDate: e.target.value })}
+                                                                    className="w-full h-11 px-4 border border-gray-100 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-700 font-medium shadow-sm transition-shadow"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                                                                    Start-Zeit
+                                                                </label>
+                                                                <input
+                                                                    type="time"
+                                                                    value={formData.customStartTime}
+                                                                    onChange={(e) => setFormData({ ...formData, customStartTime: e.target.value })}
+                                                                    className="w-full h-11 px-4 border border-gray-100 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-700 font-medium shadow-sm transition-shadow"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="space-y-2">
+                                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                                                                    End-Datum
+                                                                </label>
+                                                                <input
+                                                                    type="date"
+                                                                    value={formData.customEndDate}
+                                                                    onChange={(e) => setFormData({ ...formData, customEndDate: e.target.value })}
+                                                                    className="w-full h-11 px-4 border border-gray-100 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-700 font-medium shadow-sm transition-shadow"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                                                                    End-Zeit
+                                                                </label>
+                                                                <input
+                                                                    type="time"
+                                                                    value={formData.customEndTime}
+                                                                    onChange={(e) => setFormData({ ...formData, customEndTime: e.target.value })}
+                                                                    className="w-full h-11 px-4 border border-gray-100 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-700 font-medium shadow-sm transition-shadow"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -471,7 +631,7 @@ export default function NewAbsenceWizard() {
                                                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{formData.substitute.email}</p>
                                                   </div>
                                                   {formData.handoverEnabled && (
-                                                      <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-black uppercase tracking-widest">
+                                                      <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-semibold uppercase tracking-widest">
                                                           <ClipboardList className="h-3 w-3" /> {formData.handoverItems.filter(i => i.title.trim()).length} Übergabe-Tasks
                                                       </div>
                                                   )}
@@ -487,7 +647,7 @@ export default function NewAbsenceWizard() {
                                 <div className="absolute top-0 right-0 p-4 text-white/10 group-hover:scale-125 transition-transform duration-1000">
                                     <Send className="h-24 w-24" />
                                 </div>
-                                <h3 className="text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <h3 className="text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2">
                                     <Info className="h-4 w-4" /> Ready for Takeoff?
                                 </h3>
                                 <p className="text-sm font-medium leading-relaxed mb-6 max-w-lg">
@@ -496,7 +656,7 @@ export default function NewAbsenceWizard() {
                                 <Button 
                                     onClick={handleSubmit}
                                     disabled={isSubmitting}
-                                    className="w-full h-14 bg-white text-primary-700 hover:bg-gray-50 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-black/20 group"
+                                    className="w-full h-14 bg-white text-primary-700 hover:bg-gray-50 rounded-2xl font-semibold uppercase tracking-widest shadow-xl shadow-black/20 group"
                                 >
                                     {isSubmitting ? (
                                         <div className="flex items-center gap-3">
@@ -523,7 +683,7 @@ export default function NewAbsenceWizard() {
                             disabled={currentStep === 'details' || isSubmitting}
                             onClick={handleBack}
                             className={cn(
-                                "h-14 px-8 rounded-2xl font-black uppercase tracking-widest text-[11px] border border-gray-100 bg-white shadow-sm transition-all",
+                                "h-14 px-8 rounded-2xl font-semibold uppercase tracking-widest text-[11px] border border-gray-100 bg-white shadow-sm transition-all",
                                 currentStep === 'details' ? "opacity-0 pointer-events-none" : "hover:bg-gray-50"
                             )}
                         >
@@ -532,7 +692,7 @@ export default function NewAbsenceWizard() {
                         <Button 
                             onClick={handleNext}
                             disabled={isSubmitting}
-                            className="h-14 px-10 rounded-2xl font-black uppercase tracking-widest text-[11px] bg-primary-600 text-white shadow-xl shadow-primary-100 hover:bg-primary-700 hover:-translate-y-0.5 transition-all group"
+                            className="h-14 px-10 rounded-2xl font-semibold uppercase tracking-widest text-[11px] bg-primary-600 text-white shadow-xl shadow-primary-100 hover:bg-primary-700 hover:-translate-y-0.5 transition-all group"
                         >
                             {currentStep === 'auto-reply' ? 'Review & Senden' : 'Weiter'} 
                             <ChevronRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />

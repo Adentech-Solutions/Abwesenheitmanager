@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Absence from '@/models/Absence';
 import User from '@/models/User';
-import { getGraphUser } from '@/lib/graph-client';
+import { getGraphUser, createCalendarEvent, setAutomaticReplies, mapAutoReplySettings } from '@/lib/graph-client';
 import { verifyActionToken } from '@/lib/tokens';
 import { sendApprovalResultNotification, sendHandoverNotification, sendHandoverTrackerCard } from '@/lib/teams-bot';
+import { createBrandedHtmlResponse } from '@/lib/utils/htmlResponse';
+import { formatAbsenceType } from '@/lib/utils/format';
 
 export const dynamic = 'force-dynamic'; // Ensure this route is not cached
 
@@ -21,14 +23,14 @@ export async function GET(request: NextRequest) {
         const payload = verifyActionToken(token);
 
         if (!payload) {
-            return new NextResponse(`
-            <html>
-                <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-                    <h1 style="color: #e11d48;">Ungültiger oder abgelaufener Link</h1>
-                    <p>Dieser Link ist nicht mehr gültig. Bitte loggen Sie sich in das Dashboard ein, um den Antrag zu bearbeiten.</p>
-                </body>
-            </html>
-        `, { status: 400, headers: { 'Content-Type': 'text/html' } });
+            return createBrandedHtmlResponse(
+                'error',
+                '🔒',
+                'Link ungültig',
+                'Dieser Link ist abgelaufen oder ungültig. Bitte verwenden Sie das Dashboard.',
+                `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard`,
+                400
+            );
         }
 
         const { absenceId, action, approverId } = payload;
@@ -41,14 +43,13 @@ export async function GET(request: NextRequest) {
         }
 
         if (absence.status !== 'pending') {
-            return new NextResponse(`
-            <html>
-                <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-                    <h1 style="color: #f59e0b;">Bereits bearbeitet</h1>
-                    <p>Dieser Antrag wurde bereits ${absence.status === 'approved' ? 'genehmigt' : 'abgelehnt'}.</p>
-                </body>
-            </html>
-        `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+            return createBrandedHtmlResponse(
+                'warning',
+                '⚠️',
+                'Bereits bearbeitet',
+                `Dieser Antrag wurde bereits ${absence.status === 'approved' ? 'genehmigt' : 'abgelehnt'}.`,
+                `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard`
+            );
         }
 
         // Perform Action
@@ -57,6 +58,75 @@ export async function GET(request: NextRequest) {
 
         if (action === 'approve') {
             await absence.approve(approverId, approverEmail);
+
+            // 1. Update vacation balance
+            if (absence.type === 'vacation') {
+                const user = await User.findOne({ email: absence.userEmail });
+                if (user) {
+                    await user.updateVacationBalance(absence.totalDays);
+                }
+            }
+
+            // 2. Create calendar event
+            try {
+                const calStart = new Date(absence.startDate);
+                const calEnd = new Date(absence.endDate);
+                const isSameDay = calStart.toDateString() === calEnd.toDateString();
+                let isAllDay = !absence.isHalfDay;
+
+                if (isAllDay && isSameDay) {
+                    isAllDay = false;
+                    calStart.setHours(0, 0, 0, 0);
+                    calEnd.setHours(23, 59, 0, 0);
+                } else if (isAllDay) {
+                    calStart.setHours(0, 0, 0, 0);
+                    calEnd.setHours(0, 0, 0, 0);
+                    calEnd.setDate(calEnd.getDate() + 1);
+                }
+
+                await createCalendarEvent(absence.userId, {
+                    subject: `${formatAbsenceType(absence.type)} - ${absence.userName}`,
+                    body: absence.reason || '',
+                    startDateTime: isAllDay ? calStart.toISOString().split('T')[0] : calStart.toISOString(),
+                    endDateTime: isAllDay ? calEnd.toISOString().split('T')[0] : calEnd.toISOString(),
+                    isAllDay,
+                });
+            } catch (error) {
+                console.error('Quick Approve: Error creating calendar event:', error);
+            }
+
+            // 3. Set Auto-Reply (if enabled)
+            if (absence.autoReplySettings?.enabled) {
+                try {
+                    const cleanSettings = {
+                        enabled: absence.autoReplySettings.enabled,
+                        hasSubstitute: absence.autoReplySettings.hasSubstitute || false,
+                        substituteInfo: absence.autoReplySettings.substituteInfo,
+                        recipients: absence.autoReplySettings.recipients || {
+                            internal: true,
+                            external: true,
+                        },
+                        timing: {
+                            activateImmediately: absence.autoReplySettings.timing?.activateImmediately || false,
+                            useCustomTiming: absence.autoReplySettings.timing?.useCustomTiming || false,
+                            scheduledDate: absence.autoReplySettings.timing?.scheduledDate || absence.startDate,
+                            scheduledTime: absence.autoReplySettings.timing?.scheduledTime || '00:00',
+                            scheduledEndDate: absence.autoReplySettings.timing?.scheduledEndDate || absence.endDate,
+                            scheduledEndTime: absence.autoReplySettings.timing?.scheduledEndTime || '23:59',
+                        },
+                    };
+
+                    const graphSettings = mapAutoReplySettings(
+                        cleanSettings,
+                        absence.startDate,
+                        absence.endDate,
+                        absence.userName || 'Mitarbeiter'
+                    );
+                    await setAutomaticReplies(absence.userId, graphSettings);
+                } catch (error) {
+                    console.error('Quick Approve: Error setting auto-reply:', error);
+                }
+            }
         } else {
             await absence.reject(approverId, approverEmail, 'Abgelehnt via Quick Link');
         }
@@ -135,23 +205,20 @@ export async function GET(request: NextRequest) {
         }
 
         // Success Response
-        return new NextResponse(`
-            <html>
-                <body style="font-family: sans-serif; text-align: center; padding: 50px; background-color: #f9fafb;">
-                    <div style="background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-width: 500px; margin: 0 auto;">
-                        <h1 style="color: ${action === 'approve' ? '#16a34a' : '#d97706'};">
-                            ${action === 'approve' ? 'Erfolgreich genehmigt! ✅' : 'Erfolgreich abgelehnt! ☑️'}
-                        </h1>
-                        <p style="color: #4b5563; font-size: 1.1rem; margin-top: 20px;">
-                            Der Urlaubsantrag von <strong>${absence.userName}</strong> wurde bearbeitet.
-                        </p>
-                        <p style="margin-top: 30px;">
-                            <a href="about:blank" onclick="window.close()" style="color: #6b7280; text-decoration: underline; cursor: pointer;">Fenster schließen</a>
-                        </p>
-                    </div>
-                </body>
-            </html>
-        `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+        const responseType = action === 'approve' ? 'success' : 'error';
+        const responseIcon = action === 'approve' ? '✅' : '❌';
+        const responseTitle = action === 'approve' ? 'Erfolgreich genehmigt' : 'Antrag abgelehnt';
+        const responseMessage = action === 'approve' 
+            ? `Der Urlaubsantrag von <strong>${absence.userName}</strong> wurde genehmigt.`
+            : `Der Urlaubsantrag von <strong>${absence.userName}</strong> wurde abgelehnt.`;
+
+        return createBrandedHtmlResponse(
+            responseType,
+            responseIcon,
+            responseTitle,
+            responseMessage,
+            `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard`
+        );
 
     } catch (error) {
         console.error('Quick approval error:', error);

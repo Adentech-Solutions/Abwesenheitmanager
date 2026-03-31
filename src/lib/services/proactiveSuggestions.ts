@@ -31,20 +31,22 @@ export interface SignalResult {
 
 export interface ProactiveSuggestion {
   id: string;
-  startDate: string;       // lokales ISO "2026-05-11"
-  endDate: string;         // lokales ISO "2026-05-15"
+  startDate: string;       // gesamter freier Zeitraum Start
+  endDate: string;         // gesamter freier Zeitraum Ende
+  vacationStart: string;   // Erster echter Urlaubstag (für Link)
+  vacationEnd: string;     // Letzter echter Urlaubstag (für Link)
   urlaubstage: number;     // Wie viele Urlaubstage der User nehmen muss
   freieTage: number;       // Wie viele Tage frei insgesamt
-  headline: string;        // "Nimm die Woche 11.-15. Mai frei"
-  reason: string;          // Zusammenfassung aller aktiven Signale
+  headline: string;        // "10 Tage frei über Ostern"
+  reason: string;          // EINE flüssige, professionelle Empfehlung
   signals: {
     teamAvailable: SignalResult;
     holidayNearby: SignalResult;
     needsRecovery: SignalResult;
     calendarFree: SignalResult;
   };
-  score: number;           // 0-100, gewichtete Summe aller Signale
-  badges: string[];        // ["Team 5/5 da", "Himmelfahrt", "6 Wo. ohne Urlaub"]
+  score: number;           // Interner Score (wird in UI versteckt)
+  badges: string[];        // ["Team vollzählig", "Ostern", ...]
 }
 
 const WEIGHTS = {
@@ -124,53 +126,71 @@ export async function getProactiveSuggestion(
     end = addDays(start, 0);
   }
 
-  // URLAUBSTAGE BERECHNEN (Werktage Mo-Fr)
+  // URLAUBSTAGE BERECHNEN (Arbeitstage)
   const range = eachDayOfInterval({ start, end });
   const holidaysInPeriod = getGermanHolidays(start.getFullYear(), state);
   
-  const urlaubstage = range.filter(d => {
+  const workDaysInRange = range.filter(d => {
     if (isWeekend(d)) return false;
-    // Check if holiday
     const isPublicHoliday = holidaysInPeriod.some(h => 
       format(h.date, 'yyyy-MM-dd') === format(d, 'yyyy-MM-dd')
     );
     return !isPublicHoliday;
-  }).length;
+  });
 
+  const urlaubstage = workDaysInRange.length;
   const freieTage = range.length;
 
-  // Prüfen ob Resturlaub reicht (muss mindestens 1 Tag kosten)
+  // Erster und letzter echter Urlaubstag für den Link
+  const vacationStart = workDaysInRange.length > 0 ? workDaysInRange[0] : start;
+  const vacationEnd = workDaysInRange.length > 0 ? workDaysInRange[workDaysInRange.length - 1] : end;
+
+  // Prüfen ob Resturlaub reicht
   if (urlaubstage > remainingDays || urlaubstage < 1) {
     console.log('[SmartSuggestions] REJECTED: remainingDays =', remainingDays, 'urlaubstage needed =', urlaubstage);
     return null;
   }
 
 
-  // NACHRICHT ZUSAMMENBAUEN
-  const startStr = format(start, 'dd.', { locale: de });
-  const endStr = format(end, 'dd. MMM', { locale: de });
-  const headline = urlaubstage === 1 
-    ? `Nimm am ${format(start, 'dd. MMMM', { locale: de })} frei`
-    : `Nimm vom ${startStr} bis ${endStr} frei`;
+  // HEADLINE & PROFESSIONELLER TEXT
+  let headline = "";
+  let reason = "";
 
-  const reasonParts = [];
-  if (teamAvailable.active) reasonParts.push(teamAvailable.message);
-  if (holidayNearby.active) reasonParts.push(holidayNearby.message);
-  if (needsRecovery.active) reasonParts.push(needsRecovery.message);
-  if (calendarFree.active) reasonParts.push(calendarFree.message);
-  
-  const reason = reasonParts.join('. ') + '.';
+  if (holidayNearby.active) {
+    headline = `${freieTage} Tage frei über ${holidayNearby.data?.badge || 'die Feiertage'}`;
+    reason = `${holidayNearby.data?.badge || 'Die Feiertage'} bieten dir die perfekte Gelegenheit: Mit nur ${urlaubstage} Urlaubstagen hast du ${freieTage} freie Tage am Stück. `;
+    if (teamAvailable.active) reason += "Dein Team ist vollzählig ";
+    if (teamAvailable.active && calendarFree.active) reason += "und ";
+    if (calendarFree.active) reason += "dein Kalender ist frei ";
+    if (teamAvailable.active || calendarFree.active) reason += "— idealer Zeitpunkt.";
+  } else {
+    headline = `${freieTage} Tage Auszeit im ${format(start, 'MMMM', { locale: de })}`;
+    reason = `Gute Nachrichten für deine nächste Auszeit: `;
+    if (teamAvailable.active) reason += "Dein Team ist vollzählig ";
+    if (teamAvailable.active && calendarFree.active) reason += "und ";
+    if (calendarFree.active) reason += "dein Kalender ist entspannt ";
+    reason += "— perfekt für eine kurze Pause.";
+    
+    if (needsRecovery.active && reason.length < 100) {
+      reason += ` Du warst seit über 6 Wochen nicht mehr im Urlaub, Zeit für neue Energie!`;
+    }
+  }
 
   const badges = [];
-  if (teamAvailable.active) badges.push(teamAvailable.data?.badge || "Team da");
+  if (teamAvailable.active) badges.push("Team vollzählig");
   if (holidayNearby.active) badges.push(holidayNearby.data?.badge || "Feiertag");
-  if (needsRecovery.active) badges.push("Erholung nötig");
-  if (calendarFree.active) badges.push("Kalender leer");
+  if (needsRecovery.active) {
+      // Wochen aus data holen falls vorhanden, sonst generic
+      badges.push("Erholung nötig");
+  }
+  if (calendarFree.active) badges.push("Kalender frei");
 
-  const suggestion = {
+  const suggestion: ProactiveSuggestion = {
     id: `ps-${toLocalISO(start)}`,
     startDate: toLocalISO(start),
     endDate: toLocalISO(end),
+    vacationStart: toLocalISO(vacationStart),
+    vacationEnd: toLocalISO(vacationEnd),
     urlaubstage,
     freieTage,
     headline,
@@ -182,7 +202,7 @@ export async function getProactiveSuggestion(
       calendarFree
     },
     score: Math.round(totalScore),
-    badges
+    badges: Array.from(new Set(badges)) // Dubletten vermeiden
   };
 
   console.log('[SmartSuggestions] Score:', Math.round(totalScore), 'Suggestion: generated');
@@ -259,35 +279,52 @@ function checkHolidayNearby(state: GermanState, today: Date): SignalResult {
   const hDate = foundHoliday.date;
   const dayOfWeek = hDate.getDay(); // 0=So, 1=Mo, ... 4=Do, 5=Fr, 6=Sa
 
-  // Brückentag-Logik
-  let suggestedRange: { start: Date; end: Date } | null = null;
-  let urlaubstage = 0;
+  // Brückentag-Logik (NEU: Dynamische Block-Erweiterung)
+  
+  const isFreeDay = (d: Date) => {
+    if (isWeekend(d)) return true;
+    return holidays.some(h => format(h.date, 'yyyy-MM-dd') === format(d, 'yyyy-MM-dd'));
+  };
 
-  if (dayOfWeek === 1) { // Mo
-    // Freitag davor frei -> Fr, Sa, So, Mo (Feiertag)
-    suggestedRange = { start: addDays(hDate, -3), end: hDate }; 
-    urlaubstage = 1;
-  } else if (dayOfWeek === 2) { // Di
-    // Montag davor frei -> Sa, So, Mo, Di (Feiertag)
-    suggestedRange = { start: addDays(hDate, -3), end: hDate };
-    urlaubstage = 1;
-  } else if (dayOfWeek === 3) { // Mi
-    // Mo+Di ODER Do+Fr frei -> 5 Tage am Stück
-    suggestedRange = { start: addDays(hDate, -2), end: addDays(hDate, 2) };
-    urlaubstage = 2;
-  } else if (dayOfWeek === 4) { // Do
-    // Freitag danach frei -> Do (Feiertag), Fr, Sa, So
-    suggestedRange = { start: hDate, end: addDays(hDate, 3) };
-    urlaubstage = 1;
-  } else if (dayOfWeek === 5) { // Fr
-    // Montag danach frei -> Fr (Feiertag), Sa, So, Mo
-    suggestedRange = { start: hDate, end: addDays(hDate, 3) };
-    urlaubstage = 1;
+  const expandFreeBlock = (baseDate: Date) => {
+    let start = baseDate;
+    let end = baseDate;
+    while (isFreeDay(addDays(start, -1))) start = addDays(start, -1);
+    while (isFreeDay(addDays(end, 1))) end = addDays(end, 1);
+    return { start, end };
+  };
+
+  const baseBlock = expandFreeBlock(hDate);
+  const blockLength = eachDayOfInterval(baseBlock).length;
+  const lastDayOfBlock = baseBlock.end;
+  const dayOfWeekLast = lastDayOfBlock.getDay();
+
+  let suggestedRange: { start: Date; end: Date } | null = null;
+
+  // Strategie: Wenn der Block 1-4 Tage lang ist, hänge Arbeitstage an
+  if (blockLength >= 1) {
+    if (dayOfWeekLast === 1) { // Block endet am Montag (z.B. Ostermontag)
+      // Nimm Di-Fr frei -> Bis Sonntag danach (10 Tage am Stück)
+      suggestedRange = { start: baseBlock.start, end: endOfWeek(addDays(lastDayOfBlock, 4), { weekStartsOn: 1 }) };
+    } else if (dayOfWeekLast === 4) { // Block endet am Donnerstag (Feiertag)
+      // Nimm Freitag frei -> Bis Sonntag (4 Tage am Stück)
+      suggestedRange = { start: baseBlock.start, end: endOfWeek(lastDayOfBlock, { weekStartsOn: 1 }) };
+    } else if (dayOfWeekLast === 2) { // Block endet am Dienstag (Feiertag)
+      // Nimm Montag davor frei -> Ab Samstag davor (4 Tage am Stück)
+      suggestedRange = { start: startOfWeek(baseBlock.start, { weekStartsOn: 1 }), end: baseBlock.end };
+    } else if (dayOfWeekLast === 5) { // Block endet am Freitag (Feiertag / Karfreitag)
+      // Nimm Montag danach frei -> Bis Sonntag danach (4 Tage am Stück)
+      suggestedRange = { start: baseBlock.start, end: endOfWeek(addDays(lastDayOfBlock, 3), { weekStartsOn: 1 }) };
+    } else {
+      // Standard: Einfach nächsten Arbeitstag dazu
+      suggestedRange = { start: baseBlock.start, end: addDays(lastDayOfBlock, 1) };
+    }
   }
 
   if (suggestedRange) {
+    const totalDays = eachDayOfInterval(suggestedRange).length;
     result.active = true;
-    result.message = `${foundHoliday.name} am ${format(hDate, 'EEEE', { locale: de })} — nutze den Brückentag für mehr Tage am Stück frei`;
+    result.message = `${foundHoliday.name} — nutze den Zeitraum für ${totalDays} Tage am Stück frei`;
     result.data = { range: suggestedRange, badge: foundHoliday.name };
   }
 

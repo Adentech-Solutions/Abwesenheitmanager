@@ -21,13 +21,14 @@ import { Badge } from '@/components/ui/Badge';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { ProactiveSuggestion } from '@/lib/services/proactiveSuggestions';
+import { useVacationBalance } from '@/hooks/useVacationBalance';
 
 interface SmartSuggestionsProps {
   className?: string;
 }
 
 export default function SmartSuggestions({ className }: SmartSuggestionsProps) {
-  const { data, isLoading, error } = useQuery<{ suggestion: ProactiveSuggestion | null }>({
+  const { data, isLoading: isSuggestionLoading, error } = useQuery<{ suggestion: ProactiveSuggestion | null }>({
     queryKey: ['proactive-suggestions'],
     queryFn: async () => {
       const res = await fetch('/api/smart-suggestions');
@@ -36,6 +37,9 @@ export default function SmartSuggestions({ className }: SmartSuggestionsProps) {
     },
     staleTime: 1000 * 60 * 5, // 5 Minuten
   });
+
+  const { stats: vacationStats, isLoading: isBalanceLoading } = useVacationBalance();
+  const isLoading = isSuggestionLoading || isBalanceLoading;
 
   if (isLoading) {
     return (
@@ -94,6 +98,16 @@ export default function SmartSuggestions({ className }: SmartSuggestionsProps) {
     }
   };
 
+  const getSignalName = (key: string, badge: string) => {
+    switch(key) {
+      case 'teamAvailable': return "Team vollzählig";
+      case 'holidayNearby': return badge || "Feiertag";
+      case 'needsRecovery': return "Erholung nötig";
+      case 'calendarFree': return "Kalender frei";
+      default: return badge;
+    }
+  };
+
   return (
     <Card className={cn("relative overflow-hidden transition-all hover:shadow-md", className)}>
       {/* Visual Indicator: Score Background Glow */}
@@ -122,10 +136,10 @@ export default function SmartSuggestions({ className }: SmartSuggestionsProps) {
               <Badge 
                 key={key} 
                 variant="outline" 
-                className={cn("px-2 py-0.5 text-[10px] flex items-center transition-colors", getBadgeStyle(key))}
+                className={cn("px-2 py-0.5 text-[10px] flex items-center transition-colors font-medium", getBadgeStyle(key))}
               >
                 {getSignalIcon(key)}
-                {suggestion.badges.find(b => b.includes(sig.data?.badge || b)) || sig.message.split('—')[0].trim()}
+                {getSignalName(key, suggestion.badges.find(b => b === sig.data?.badge) || "")}
               </Badge>
             );
           })}
@@ -144,16 +158,11 @@ export default function SmartSuggestions({ className }: SmartSuggestionsProps) {
               <span className="text-sm font-bold text-gray-900">{suggestion.urlaubstage}</span>
             </div>
           </div>
-          
-          {/* Subtle Score Circle */}
-          <div className="h-8 w-8 rounded-full border-2 border-primary-100 flex items-center justify-center bg-white" title={`Empfehlungs-Score: ${suggestion.score}/100`}>
-             <span className="text-[10px] font-bold text-primary-600">{suggestion.score}</span>
-          </div>
         </div>
 
         {/* CTA */}
         <Link 
-          href={`/absences/new?type=vacation&start=${suggestion.startDate}&end=${suggestion.endDate}`}
+          href={`/absences/new?type=vacation&start=${suggestion.vacationStart}&end=${suggestion.vacationEnd}`}
           className="block group"
         >
           <Button className="w-full justify-between h-10 px-4 group-hover:shadow-sm" variant="default">
@@ -164,7 +173,9 @@ export default function SmartSuggestions({ className }: SmartSuggestionsProps) {
         
         <p className="text-center text-[10px] text-gray-400 flex items-center justify-center gap-1">
           <Info className="h-3 w-3" />
-          Resturlaub danach: <span className="font-semibold text-gray-600">{(suggestion as any).remainingAfter || '--'} Tage</span>
+          Resturlaub danach: <span className="font-semibold text-gray-600">
+            {vacationStats ? `${vacationStats.remaining - suggestion.urlaubstage} von ${vacationStats.total} Tagen` : '--'}
+          </span>
         </p>
       </CardContent>
     </Card>

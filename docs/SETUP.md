@@ -1,3 +1,4 @@
+
 # Setup & Installation Guide - Freyetag Absence Management
 
 Dieses Dokument führt Sie durch die Installation und Konfiguration der Freyetag Abwesenheitsverwaltung.

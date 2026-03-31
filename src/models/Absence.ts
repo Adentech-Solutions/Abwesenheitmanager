@@ -176,11 +176,17 @@ const AbsenceSchema = new Schema<IAbsenceDocument>(
           type: Boolean,
           default: false,
         },
+        useCustomTiming: {
+          type: Boolean,
+          default: false,
+        },
         scheduledDate: Date,
         scheduledTime: {
           type: String,
           default: '00:00',
         },
+        scheduledEndDate: Date,
+        scheduledEndTime: String,
       },
 
       // Generierte Nachricht

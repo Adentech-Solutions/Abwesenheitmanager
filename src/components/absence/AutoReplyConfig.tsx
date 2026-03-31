@@ -37,6 +37,27 @@ export default function AutoReplyConfig({
     scheduledTime: '00:00',
   });
 
+  const [useCustomTiming, setUseCustomTiming] = useState(value.timing?.useCustomTiming || false);
+  const safeDateString = (d: any) => {
+    try {
+      return new Date(d).toISOString().split('T')[0];
+    } catch {
+      return new Date().toISOString().split('T')[0];
+    }
+  };
+  const [customStartDate, setCustomStartDate] = useState(value.timing?.scheduledDate ? safeDateString(value.timing.scheduledDate) : safeDateString(startDate));
+  const [customStartTime, setCustomStartTime] = useState(value.timing?.scheduledTime || '00:00');
+  const [customEndDate, setCustomEndDate] = useState(value.timing?.scheduledEndDate ? safeDateString(value.timing.scheduledEndDate) : safeDateString(endDate));
+  const [customEndTime, setCustomEndTime] = useState(value.timing?.scheduledEndTime || '23:59');
+
+  // Sync custom dates if not using custom timing and props change
+  useEffect(() => {
+    if (!useCustomTiming) {
+      setCustomStartDate(safeDateString(startDate));
+      setCustomEndDate(safeDateString(endDate));
+    }
+  }, [startDate, endDate, useCustomTiming]);
+
   // Update parent when settings change
   useEffect(() => {
     if (!enabled) {
@@ -51,10 +72,18 @@ export default function AutoReplyConfig({
       recipients,
       timing: {
         ...timing,
-        scheduledDate: new Date(startDate),
+        activateImmediately: false,
+        useCustomTiming,
+        scheduledDate: useCustomTiming ? new Date(customStartDate) : new Date(startDate),
+        scheduledTime: useCustomTiming ? customStartTime : '00:00',
+        scheduledEndDate: useCustomTiming ? new Date(customEndDate) : new Date(endDate),
+        scheduledEndTime: useCustomTiming ? customEndTime : '23:59',
       },
     });
-  }, [enabled, hasSubstitute, substituteInfo, recipients, timing, startDate]);
+  }, [
+    enabled, hasSubstitute, substituteInfo, recipients, timing, startDate, endDate,
+    useCustomTiming, customStartDate, customStartTime, customEndDate, customEndTime,
+  ]);
 
   // Generate preview message
   const generatePreview = () => {
@@ -247,53 +276,72 @@ export default function AutoReplyConfig({
           <label className="flex items-center">
             <input
               type="radio"
-              checked={timing.activateImmediately}
-              onChange={() => setTiming({ ...timing, activateImmediately: true })}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              checked={!useCustomTiming}
+              onChange={() => setUseCustomTiming(false)}
+              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
             />
-            <span className="ml-2 text-sm text-gray-700">Sofort aktivieren</span>
+            <span className="ml-2 text-sm text-gray-700 font-medium">Automatisch (Start/Ende der Abwesenheit)</span>
           </label>
 
           <label className="flex items-center">
             <input
               type="radio"
-              checked={!timing.activateImmediately}
-              onChange={() => setTiming({ ...timing, activateImmediately: false })}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              checked={useCustomTiming}
+              onChange={() => setUseCustomTiming(true)}
+              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
             />
-            <span className="ml-2 text-sm text-gray-700">Geplant aktivieren am:</span>
+            <span className="ml-2 text-sm text-gray-700 font-medium">Benutzerdefiniert</span>
           </label>
 
-          {!timing.activateImmediately && (
-            <div className="ml-6 space-y-3 mt-3 p-4 bg-gray-50 rounded-lg">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  📅 Datum
-                </label>
-                <input
-                  type="date"
-                  value={new Date(startDate).toISOString().split('T')[0]}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Wird automatisch auf Ihr Startdatum gesetzt
-                </p>
+          {useCustomTiming && (
+            <div className="ml-6 mt-3 p-5 bg-gray-50 rounded-xl border border-gray-100 animate-in zoom-in-95 duration-300 space-y-5 shadow-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 pl-1">
+                    Start-Datum
+                  </label>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="w-full h-11 px-4 border border-gray-100 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-medium shadow-sm transition-shadow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 pl-1">
+                    Start-Zeit
+                  </label>
+                  <input
+                    type="time"
+                    value={customStartTime}
+                    onChange={(e) => setCustomStartTime(e.target.value)}
+                    className="w-full h-11 px-4 border border-gray-100 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-medium shadow-sm transition-shadow"
+                  />
+                </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  🕐 Uhrzeit
-                </label>
-                <input
-                  type="time"
-                  value={timing.scheduledTime}
-                  onChange={(e) => setTiming({ ...timing, scheduledTime: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Standard: 00:00 Uhr (Mitternacht)
-                </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 pl-1">
+                    End-Datum
+                  </label>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="w-full h-11 px-4 border border-gray-100 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-medium shadow-sm transition-shadow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 pl-1">
+                    End-Zeit
+                  </label>
+                  <input
+                    type="time"
+                    value={customEndTime}
+                    onChange={(e) => setCustomEndTime(e.target.value)}
+                    className="w-full h-11 px-4 border border-gray-100 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-medium shadow-sm transition-shadow"
+                  />
+                </div>
               </div>
             </div>
           )}

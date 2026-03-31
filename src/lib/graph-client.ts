@@ -214,8 +214,11 @@ export function mapAutoReplySettings(
     };
     timing?: {
       activateImmediately: boolean;
+      useCustomTiming?: boolean;
       scheduledDate: Date | string;
       scheduledTime: string;
+      scheduledEndDate?: Date | string;
+      scheduledEndTime?: string;
     };
   },
   startDate: Date | string,
@@ -280,18 +283,27 @@ export function mapAutoReplySettings(
 
   // Add DateTime nur wenn scheduled
   if (status === 'scheduled') {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    // Set time from timing or use defaults
-    const startTime = frontendSettings.timing?.scheduledTime || '00:00';
-    const [startHour, startMinute] = startTime.split(':');
-    start.setHours(parseInt(startHour), parseInt(startMinute), 0, 0);
-    
-    end.setHours(23, 59, 59, 999);
+    const useCustom = frontendSettings.timing?.useCustomTiming;
 
-    result.startDateTime = start.toISOString();
-    result.endDateTime = end.toISOString();
+    const replyStartDate = useCustom && frontendSettings.timing?.scheduledDate
+      ? new Date(frontendSettings.timing.scheduledDate)
+      : new Date(startDate);
+    
+    const replyEndDate = useCustom && frontendSettings.timing?.scheduledEndDate
+      ? new Date(frontendSettings.timing.scheduledEndDate)
+      : new Date(endDate);
+
+    const startTime = useCustom ? (frontendSettings.timing?.scheduledTime || '00:00') : '00:00';
+    const endTime = useCustom ? (frontendSettings.timing?.scheduledEndTime || '23:59') : '23:59';
+
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const [endHour, endMinute] = endTime.split(':').map(Number);
+    
+    replyStartDate.setHours(startHour, startMinute, 0, 0);
+    replyEndDate.setHours(endHour, endMinute, 59, 999);
+
+    result.startDateTime = replyStartDate.toISOString();
+    result.endDateTime = replyEndDate.toISOString();
   }
 
   return result;

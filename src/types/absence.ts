@@ -21,8 +21,11 @@ export interface AutoReplyRecipients {
 
 export interface AutoReplyTiming {
   activateImmediately: boolean;
+  useCustomTiming?: boolean;
   scheduledDate?: Date;
   scheduledTime?: string;
+  scheduledEndDate?: Date;
+  scheduledEndTime?: string;
 }
 
 export interface AutoReplyGeneratedMessage {

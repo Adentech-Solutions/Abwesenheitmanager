@@ -10,6 +10,7 @@ import User from '@/models/User';
 import { verifyActionToken } from '@/lib/tokens';
 import { sendHandoverAcknowledged, sendHandoverTrackerCard } from '@/lib/teams-bot';
 import { auditLog } from '@/lib/middleware/audit';
+import { createBrandedHtmlResponse } from '@/lib/utils/htmlResponse';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,16 +113,14 @@ export async function GET(
     const payload = verifyActionToken(token);
 
     if (!payload) {
-      return new NextResponse(`
-        <html>
-          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-align: center; padding: 50px; background-color: #f9fafb;">
-            <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto;">
-              <h1 style="color: #e11d48;">Ungültiger oder abgelaufener Link</h1>
-              <p style="color: #4b5563;">Dieser Link ist nicht mehr gültig. Bitte loggen Sie sich in die App ein.</p>
-            </div>
-          </body>
-        </html>
-      `, { status: 400, headers: { 'Content-Type': 'text/html' } });
+      return createBrandedHtmlResponse(
+        'error',
+        '🔒',
+        'Link ungültig',
+        'Dieser Link ist abgelaufen oder ungültig. Bitte verwenden Sie das Dashboard.',
+        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard`,
+        400
+      );
     }
 
     if (payload.action !== 'acknowledge') {
@@ -137,19 +136,13 @@ export async function GET(
 
     // Already acknowledged?
     if (absence.handover?.acknowledgedAt) {
-      return new NextResponse(`
-        <html>
-          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-align: center; padding: 50px; background-color: #f9fafb;">
-            <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto;">
-              <h1 style="color: #f59e0b;">Bereits bestätigt ✅</h1>
-              <p style="color: #4b5563;">Sie haben diese Übergabe bereits zur Kenntnis genommen.</p>
-              <p style="margin-top: 20px;">
-                <a href="about:blank" onclick="window.close()" style="color: #6b7280; text-decoration: underline; cursor: pointer;">Fenster schließen</a>
-              </p>
-            </div>
-          </body>
-        </html>
-      `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+      return createBrandedHtmlResponse(
+        'warning',
+        '⚠️',
+        'Bereits bestätigt',
+        'Sie haben diese Übergabe bereits zur Kenntnis genommen.',
+        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard`
+      );
     }
 
     // Set acknowledged timestamps
@@ -186,24 +179,13 @@ export async function GET(
     }
 
     // Success response
-    return new NextResponse(`
-      <html>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-align: center; padding: 50px; background-color: #f9fafb;">
-          <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto;">
-            <h1 style="color: #16a34a;">Übergabe bestätigt ✅</h1>
-            <p style="color: #4b5563; font-size: 1.1rem; margin-top: 20px;">
-              Sie haben die Übergabe von <strong>${absence.userName}</strong> zur Kenntnis genommen.
-            </p>
-            <p style="color: #6b7280; margin-top: 10px;">
-              ${absence.userName} wurde benachrichtigt.
-            </p>
-            <p style="margin-top: 30px;">
-              <a href="about:blank" onclick="window.close()" style="color: #6b7280; text-decoration: underline; cursor: pointer;">Fenster schließen</a>
-            </p>
-          </div>
-        </body>
-      </html>
-    `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+    return createBrandedHtmlResponse(
+      'success',
+      '✅',
+      'Übergabe bestätigt',
+      `Sie haben die Übergabe von <strong>${absence.userName}</strong> zur Kenntnis genommen.<br><br><span style="color: #6b7280;">${absence.userName} wurde benachrichtigt.</span>`,
+      `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard`
+    );
 
   } catch (error) {
     console.error('Handover acknowledge error:', error);

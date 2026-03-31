@@ -69,14 +69,36 @@ export async function POST(
       }
     }
 
-    // Create calendar event
     try {
+      const calStart = new Date(absence.startDate);
+      const calEnd = new Date(absence.endDate);
+      const isSameDay = calStart.toDateString() === calEnd.toDateString();
+
+      let isAllDay = !absence.isHalfDay;
+
+      if (isAllDay && isSameDay) {
+        // Same-Day: Kann kein All-Day Event sein → verwende Zeitfenster
+        isAllDay = false;
+        calStart.setHours(0, 0, 0, 0);
+        calEnd.setHours(23, 59, 0, 0);
+      } else if (isAllDay) {
+        // Multi-Day: Normales All-Day Event
+        calStart.setHours(0, 0, 0, 0);
+        calEnd.setHours(0, 0, 0, 0);
+        // Graph API braucht für All-Day Events: endDate = letzter Tag + 1
+        calEnd.setDate(calEnd.getDate() + 1);
+      }
+
       await createCalendarEvent(absence.userId, {
         subject: `${formatAbsenceType(absence.type)} - ${absence.userName}`,
         body: absence.reason || '',
-        startDateTime: new Date(absence.startDate).toISOString(),
-        endDateTime: new Date(absence.endDate).toISOString(),
-        isAllDay: !absence.isHalfDay,
+        startDateTime: isAllDay
+          ? calStart.toISOString().split('T')[0]
+          : calStart.toISOString(),
+        endDateTime: isAllDay
+          ? calEnd.toISOString().split('T')[0]
+          : calEnd.toISOString(),
+        isAllDay,
       });
     } catch (error) {
       console.error('Error creating calendar event:', error);
