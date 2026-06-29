@@ -225,7 +225,7 @@ export default function UserManagementPage() {
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Benutzer</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Rolle</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Abteilung</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Urlaub (G)</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Urlaub (Rest / G)</th>
                                     <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest">Aktionen</th>
                                 </tr>
                             </thead>
@@ -294,11 +294,15 @@ export default function UserManagementPage() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1.5">
                                                         <span className="text-sm font-bold text-gray-900">
+                                                            {typeof user.vacationDays === 'object' ? user.vacationDays.remaining : user.vacationDays}
+                                                        </span>
+                                                        <span className="text-sm font-medium text-gray-400">/</span>
+                                                        <span className="text-sm font-medium text-gray-400">
                                                             {typeof user.vacationDays === 'object' ? user.vacationDays.total : user.vacationDays}
                                                         </span>
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Tage</span>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter ml-1">Tage</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -514,13 +518,23 @@ export default function UserManagementPage() {
                             value={formData.department || ''}
                             onChange={(e: any) => setFormData({ ...formData, department: e.target.value })}
                         />
-                        <Input
-                            type="number"
-                            label="Urlaubstage (Anspruch)"
-                            value={typeof formData.vacationDays === 'object' ? formData.vacationDays.total : formData.vacationDays || 0}
-                            onChange={(e: any) => setFormData({ ...formData, vacationDays: parseInt(e.target.value) })}
-                            required
-                        />
+                        <div className="space-y-1">
+                            <Input
+                                type="number"
+                                label="Urlaubstage (Anspruch Gesamt)"
+                                value={typeof formData.vacationDays === 'object' ? formData.vacationDays.total : formData.vacationDays || 0}
+                                onChange={(e: any) => setFormData({ ...formData, vacationDays: parseInt(e.target.value) || 0 })}
+                                required
+                            />
+                            {selectedUser && typeof selectedUser.vacationDays === 'object' && (
+                                <p className="text-[10px] text-gray-500 font-medium px-1">
+                                    Bereits verbraucht (oder geplant): <span className="font-bold text-gray-700">{selectedUser.vacationDays.used}</span> Tage | 
+                                    Neuer Resturlaub: <span className="font-bold text-primary-600">
+                                        {((typeof formData.vacationDays === 'object' ? formData.vacationDays.total : (formData.vacationDays || 0)) - selectedUser.vacationDays.used)}
+                                    </span> Tage
+                                </p>
+                            )}
+                        </div>
                         <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
                             <input
                                 type="checkbox"

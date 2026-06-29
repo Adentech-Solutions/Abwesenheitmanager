@@ -126,16 +126,22 @@ export async function PUT(
             allowedUpdates.push('role', 'vacationDays', 'name', 'email');
         }
 
-        // Apply updates
+        // Apply updates robustly using updateOne to overwrite any primitive malformed data in DB
+        const updateDoc: any = {};
         Object.keys(body).forEach(key => {
             if (allowedUpdates.includes(key)) {
-                (targetUser as any)[key] = body[key];
+                updateDoc[key] = body[key];
             }
         });
 
-        await targetUser.save();
+        if (Object.keys(updateDoc).length > 0) {
+            await User.updateOne({ _id: targetUser._id }, { $set: updateDoc });
+        }
 
-        return NextResponse.json({ user: targetUser });
+        // Fetch freshly updated user
+        const updatedUser = await User.findById(targetUser._id).lean();
+
+        return NextResponse.json({ user: updatedUser });
     } catch (error) {
         console.error('Error updating user:', error);
         return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });

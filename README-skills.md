@@ -21,7 +21,7 @@ Dieses Paket enthält das komplette Agent-System für die Freyetag Absence Manag
 |---|---|---|
 | freyetag-frontend | UI/Component Tasks | React, Tailwind, shadcn/ui Patterns |
 | freyetag-backend | API/DB Tasks | Routes, Models, Services, Integrationen |
-| freyetag-security | "audit", "security" | Vollständiger Security-Scan |
+| freyetag-security | "audit", "security" | Read-only Security-Agent mit manager-tauglichen Berichten |
 | freyetag-reviewer | "review", "prüfe" | Code Review nach jedem Task |
 | freyetag-docs | "docs", "README" | Dokumentation + Diagramme (MCP) |
 | freyetag-skill-updater | "update skills" | Hält Skills aktuell |
@@ -30,7 +30,7 @@ Dieses Paket enthält das komplette Agent-System für die Freyetag Absence Manag
 | Command | Zweck |
 |---|---|
 | /feature | Feature implementieren + Self-Review |
-| /audit | Vollständiger Security + Quality Audit |
+| /audit | Manueller read-only Security-Review mit verstaendlichem Bericht |
 | /deploy-check | Pre-Deployment Checkliste |
 | /update-skills | Alle Skills aktualisieren |
 | /generate-docs | Dokumentation + Diagramme generieren |
@@ -59,3 +59,4 @@ Dieses Paket enthält das komplette Agent-System für die Freyetag Absence Manag
 # Komplette Dokumentation generieren
 /generate-docs
 ```
+

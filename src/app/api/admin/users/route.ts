@@ -37,10 +37,14 @@ export async function GET(request: NextRequest) {
             .select('-__v')
             .sort({ name: 1 })
             .skip(skip)
-            .limit(limit);
+            .limit(limit)
+            .lean();
 
         return NextResponse.json({
-            users,
+            users: users.map(user => ({
+                ...user,
+                _id: user._id?.toString()
+            })),
             pagination: {
                 total,
                 page,
@@ -74,8 +78,10 @@ export async function POST(request: NextRequest) {
 
         const newUser = await User.create({
             ...body,
-            isActive: true, // Default to active
-            vacationDays: body.vacationDays || 30, // Default to 30
+            isActive: body.isActive !== undefined ? body.isActive : true,
+            vacationDays: typeof body.vacationDays === 'number' 
+                ? { total: body.vacationDays, used: 0, remaining: body.vacationDays, carryOver: 0, source: 'local' }
+                : (body.vacationDays || { total: 30, used: 0, remaining: 30, carryOver: 0, source: 'local' }),
             role: body.role || 'employee'
         });
 

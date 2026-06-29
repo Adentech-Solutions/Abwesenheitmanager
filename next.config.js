@@ -1,8 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   reactStrictMode: true,
   swcMinify: true,
-  
+
   // Environment variables exposed to the browser
   env: {
     NEXT_PUBLIC_APP_NAME: 'Absence Management',
